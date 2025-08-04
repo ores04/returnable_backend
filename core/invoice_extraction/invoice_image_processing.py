@@ -1,5 +1,37 @@
+import json
 import cv2
 import pytesseract
+
+from ..ai_clients.openai_client import OpenAIClient
+
+from pydantic import BaseModel
+
+INVOICE_EXTRACTION_PROMT = """
+The information in the promt is extracted via OCR from an invoice image. Please extract the following information from the text:
+- Invoice Number
+- Date
+- Name to ie the name of person or company to whom the invoice is addressed
+- From Company ie the company that issued the invoice
+- Customer Number if available this is not a must and can be None
+
+Hints: The from company is usually the first company mentioned in the text. 
+The company from CANT be used in directly next to the name_to, as this is usually the company that issued the invoice. 
+
+The text is in German. Please return the information in a JSON format with the following keys:
+- invoice_number
+- date
+- name_to
+- from_company
+- customer_number"""
+
+
+class InvoiceInformation(BaseModel):
+    "This model represents the information from the invoice needed to propose a return."
+    invoice_number: str | None = None
+    customer_number: str | None = None
+    date: str
+    name_to: str
+    from_company: str
 
 
 class InvoiceImageProcessing:
@@ -16,8 +48,8 @@ class InvoiceImageProcessing:
         gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         _, thresh_image = cv2.threshold(
             gray_image, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        resized_image = cv2.resize(thresh_image, (800, 600))
-        return resized_image
+        # resized_image = cv2.resize(thresh_image, (800, 600))
+        return thresh_image
 
     def process_image(self):
         """
@@ -25,17 +57,152 @@ class InvoiceImageProcessing:
         Returns the extracted text.
         """
         preprocessed_image = self.preprocess_image()
-        extracted_text = self.ocr_engine.image_to_data(
-            preprocessed_image, output_type=pytesseract.Output.DICT)
-        return extracted_text
+        # option to use german language and treat as multiple blocks of text
+        custom_config = r'--oem 3 --psm 6 -l deu'
+        self.extracted_text = self.ocr_engine.image_to_data(
+            preprocessed_image, output_type=pytesseract.Output.DICT, config=custom_config)
+        return self.extracted_text
+
+    def group_text_by_indent_refactored(self, ocr_data, indent_tolerance=10):
+        """
+        Groups text from Tesseract OCR data into a hierarchical JSON structure
+        based on line indentation with a configurable tolerance.
+
+        Args:
+            ocr_data (dict): The dictionary output from pytesseract.image_to_data.
+            indent_tolerance (int): The number of pixels to tolerate when comparing
+                                    indentation levels. Lines with indents that
+                                    differ by less than this value are treated as
+                                    being at the same level.
+
+        Returns:
+            str: A JSON string representing the nested structure of the text.
+        """
+        # --- 1. Reconstruct lines from word data robustly ---
+        lines = {}
+        # Gracefully handle invalid top-level input
+        if not isinstance(ocr_data, dict) or 'text' not in ocr_data:
+            return json.dumps([], indent=2)
+
+        for i in range(len(ocr_data['text'])):
+            try:
+                # Skip non-word elements and empty text
+                conf = int(ocr_data['conf'][i])
+                text = ocr_data['text'][i].strip()
+                if conf < 0 or not text:
+                    continue
+
+                line_key = (
+                    ocr_data['page_num'][i],
+                    ocr_data['block_num'][i],
+                    ocr_data['par_num'][i],
+                    ocr_data['line_num'][i],
+                )
+
+                word_info = {
+                    'text': text,
+                    'left': int(ocr_data['left'][i]),
+                    'word_num': int(ocr_data['word_num'][i]),
+                }
+                # Also capture 'top' at the word level for later sorting
+                if i == 0 or line_key not in lines:
+                    word_info['top'] = int(ocr_data['top'][i])
+
+                lines.setdefault(line_key, []).append(word_info)
+
+            except (KeyError, ValueError):
+                # If a word entry is malformed (e.g., missing key or non-numeric
+                # value), skip it instead of crashing.
+                continue
+
+        # --- 2. Process and sort the reconstructed lines ---
+        processed_lines = []
+        for words in lines.values():
+            if not words:
+                continue
+
+            sorted_words = sorted(words, key=lambda w: w['word_num'])
+            full_text = ' '.join(w['text'] for w in sorted_words)
+
+            # Use the 'top' of the first word for vertical sorting
+            line_top = words[0].get('top', 0)
+
+            processed_lines.append({
+                'text': full_text,
+                'indent': sorted_words[0]['left'],
+                'top': line_top,
+            })
+
+        # Sort all lines based on their vertical position
+        sorted_lines = sorted(processed_lines, key=lambda l: l['top'])
+
+        # --- 3. Build the hierarchical tree using a stack and tolerance ---
+        root = {'children': []}
+        # The stack holds tuples of (indentation_level, parent_node)
+        stack = [(-1, root)]
+
+        for line in sorted_lines:
+            current_indent = line['indent']
+            node = {'text': line['text']}
+
+            # Pop from stack until we find a parent with a smaller indent,
+            # using the tolerance to group similar-level indents.
+            # A parent's indent must be less than the child's indent minus the tolerance.
+            while stack and stack[-1][0] >= current_indent - indent_tolerance:
+                stack.pop()
+
+            # The last item on the stack is now the correct parent.
+            parent_node = stack[-1][1]
+
+            # Use setdefault for a cleaner way to add children list
+            parent_node.setdefault('children', []).append(node)
+
+            # The current node becomes a potential parent for subsequent lines.
+            stack.append((current_indent, node))
+
+        # The redundant cleanup step is no longer needed.
+
+        # Return the final structure as a formatted JSON string
+        return json.dumps(root.get('children', []), indent=2, ensure_ascii=False)
+
+    def extract_information(self):
+        """
+        Extract specific information from the processed image.
+        This can be extended to extract fields like invoice number, date, total amount, etc.
+        """
+        text_dict = self.process_image()
+        print("Extracted text:", self.group_text_by_indent_refactored(text_dict))
+        text = self.group_text_by_indent_refactored(text_dict)
+
+        client = OpenAIClient()
+
+        response = client.request_text_model(
+            instruction=INVOICE_EXTRACTION_PROMT,
+            prompt=text,
+            model="gpt-4.1",
+            response_model=InvoiceInformation
+        )
+        return response
 
 
 if __name__ == "__main__":
     # download test data
-    import pandas as pd
+    import numpy as np
+    from datasets import load_dataset
 
-    df = pd.read_parquet(
-        "hf://datasets/Aoschu/German_invoices_dataset/data/train-00000-of-00001-f9d614282a2aa4e0.parquet")
-    print(df.head(10))
-    # save the first 10 rows to a CSV file
-    df.head(10).to_csv("test_data.csv", index=False)
+    dataset = load_dataset("Aoschu/German_invoices_dataset")
+
+    first_image = dataset['train'][0]['image']
+
+    # The image is a PIL Image object, so you can display it
+    first_image.show()
+
+    # Convert PIL Image to cv2 format
+    # PIL uses RGB, cv2 uses BGR, so we need to convert
+    pil_image = first_image.convert('RGB')  # Ensure RGB format
+    cv2_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+
+    # Now you can use the cv2_image with your InvoiceImageProcessing class
+    processor = InvoiceImageProcessing(cv2_image)
+    extracted_text = processor.extract_information()
+    print("Extracted text:", extracted_text)
