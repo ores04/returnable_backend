@@ -14,8 +14,9 @@ The information in the promt is extracted via OCR from an invoice image. Please 
 - From Company ie the company that issued the invoice
 - Customer Number if available this is not a must and can be None
 
-Hints: The from company is usually the first company mentioned in the text. 
+Hints: The from company is usually the first company mentioned in the text. It is also possible that the from_company is a person.
 The company from CANT be used in directly next to the name_to, as this is usually the company that issued the invoice. 
+The invoice numer is usually mentioned as "Rechnung Nr." or "Rechnungsnummer" or "Invoice Number" or "Invoice No." or "Angebotsnummer" or "Angebots-Nr." or "Bestellnummer" or "Bestell-Nr." or "Auftragsnummer" or "Auftrags-Nr.".
 
 The text is in German. Please return the information in a JSON format with the following keys:
 - invoice_number
@@ -33,6 +34,16 @@ class InvoiceInformation(BaseModel):
     name_to: str
     from_company: str
 
+    def __eq__(self, other):
+        """Two InvoiceInformation objects are equal if all fields match."""
+        if not isinstance(other, InvoiceInformation):
+            return False
+        return (self.invoice_number == other.invoice_number and
+                self.customer_number == other.customer_number and
+                self.date == other.date and
+                self.name_to == other.name_to and
+                self.from_company == other.from_company)
+
 
 class InvoiceImageProcessing:
 
@@ -46,9 +57,9 @@ class InvoiceImageProcessing:
         This includes converting to grayscale, thresholding, and resizing.
         """
         gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+
         _, thresh_image = cv2.threshold(
             gray_image, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        # resized_image = cv2.resize(thresh_image, (800, 600))
         return thresh_image
 
     def process_image(self):
@@ -171,6 +182,7 @@ class InvoiceImageProcessing:
         This can be extended to extract fields like invoice number, date, total amount, etc.
         """
         text_dict = self.process_image()
+        print("Extracted text without prep:", text_dict)
         print("Extracted text:", self.group_text_by_indent_refactored(text_dict))
         text = self.group_text_by_indent_refactored(text_dict)
 
@@ -179,7 +191,7 @@ class InvoiceImageProcessing:
         response = client.request_text_model(
             instruction=INVOICE_EXTRACTION_PROMT,
             prompt=text,
-            model="gpt-4.1",
+            model="gpt-4o",
             response_model=InvoiceInformation
         )
         return response
@@ -192,7 +204,7 @@ if __name__ == "__main__":
 
     dataset = load_dataset("Aoschu/German_invoices_dataset")
 
-    first_image = dataset['train'][0]['image']
+    first_image = dataset['train'][60]['image']
 
     # The image is a PIL Image object, so you can display it
     first_image.show()
