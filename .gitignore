@@ -10,7 +10,6 @@ venv/
 # secrets
 *.env
 *.secret
-*.env.server
 
 # datasets
 /datasets/
