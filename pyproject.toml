@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "returnable-core"
+version = "0.1.0"
+description = "Core library for Returnable backend"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Sebastian Orth" }]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*"]
+exclude = [
+  "core/IT_tests*",
+  "core/__pycache__*",
+]

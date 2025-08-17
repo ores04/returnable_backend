@@ -25,6 +25,8 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8080",
         "http://localhost:8000",
+        # we need to allow users to access the API from their own origins
+        "https://test-461641401152.europe-west1.run.app"
     ]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
