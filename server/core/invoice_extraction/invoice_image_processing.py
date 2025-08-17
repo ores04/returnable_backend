@@ -44,6 +44,28 @@ class InvoiceInformation(BaseModel):
                 self.name_to == other.name_to and
                 self.from_company == other.from_company)
 
+    def to_dict(self):
+        """ This class converts the InvoiceInformation to a dictionary, which is in the form used by the 
+        frontend and the db"""
+        return {
+            "invoice_date": self.date,
+            "invoice_id": self.invoice_number,
+            "customer_id": self.customer_number,
+            "name_to": self.name_to,
+            "product_from_company": self.from_company
+        }
+
+    def from_dict(cls, data: dict):
+        """ This class converts a dictionary to an InvoiceInformation object, which is in the form used by the 
+        frontend and the db"""
+        return cls(
+            invoice_number=data.get("invoice_id"),
+            customer_number=data.get("customer_id"),
+            date=data.get("invoice_date"),
+            name_to=data.get("name_to"),
+            from_company=data.get("product_from_company")
+        )
+
 
 class InvoiceImageProcessing:
 
@@ -176,7 +198,7 @@ class InvoiceImageProcessing:
         # Return the final structure as a formatted JSON string
         return json.dumps(root.get('children', []), indent=2, ensure_ascii=False)
 
-    def extract_information(self):
+    def extract_information(self) -> InvoiceInformation:
         """
         Extract specific information from the processed image.
         This can be extended to extract fields like invoice number, date, total amount, etc.

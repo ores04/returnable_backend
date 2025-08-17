@@ -1,7 +1,7 @@
 """
 endpoints that are used in the complaint process
 """
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, UploadFile, Request
 from typing import Dict, Any
 import numpy as np
 import cv2
@@ -16,7 +16,6 @@ from core.agents.contact_information_agent import master_search_agent, SearchDep
 from core.agents.mail_agent import write_return_mail
 
 router = APIRouter()
-router.prefix = "/complaint"
 
 
 class ProposeActionProps(BaseModel):
@@ -32,6 +31,10 @@ class ProposeActionProps(BaseModel):
 
 @router.post("/process-pdf")
 async def process_pdf(file: UploadFile) -> Dict[str, Any]:
+    """Accepts a PDF file and processes it to extract information."""
+
+    print(f"Processing PDF file: {file.filename}")
+
     contents = await file.read()
 
     try:
@@ -55,6 +58,36 @@ async def process_pdf(file: UploadFile) -> Dict[str, Any]:
         "status": "success",
         "message": "PDF processed successfully",
         "data": extracted_info
+    }
+
+
+@router.post("/process-file")
+async def process_file(request: Request) -> Dict[str, Any]:
+    """Accepts raw image bytes in the request body and processes them like /process-pdf."""
+    contents = await request.body()
+
+    try:
+        # convert the raw body to a cv2 image
+        image = Image.open(BytesIO(contents))
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        cv2_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to process image: {str(e)}"
+        }
+
+    # use the image processing class to extract information
+    processor = InvoiceImageProcessing(cv2_image)
+    extracted_info = processor.extract_information()
+
+    return {
+        "status": "success",
+        "message": "Image processed successfully",
+        # Assuming extract_information returns a dict-like object
+        "data": extracted_info.to_dict()
     }
 
 
