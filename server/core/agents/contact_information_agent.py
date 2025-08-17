@@ -53,7 +53,7 @@ master_search_agent = Agent(
     system_prompt="You are an expert search agent. You task is to find the customer support email address for the company that will be mentioned in the user query. To start the search use the search tool.",
     instrument=True,
     deps_type=SearchDeps,
-    result_type=[SearchResult | str | EmptyPage],
+    output_type=[SearchResult | str | EmptyPage],
 )
 
 site_agent = Agent(
@@ -63,7 +63,7 @@ site_agent = Agent(
     "If you found no information, return an EmptyPage object. You should search with German keywords, as the user will likely use German keywords.",
     instrument=True,
     deps_type=SearchDeps,
-    result_type=[SearchResult | str | EmptyPage],
+    output_type=[SearchResult | str | EmptyPage],
 )
 
 
