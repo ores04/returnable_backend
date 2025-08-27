@@ -13,3 +13,8 @@ venv/
 
 # datasets
 /datasets/
+
+# google cloud credentials
+/server/oauth_client_id.json
+
+.idea

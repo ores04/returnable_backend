@@ -1,6 +1,7 @@
 """
 endpoints that are used in the complaint process
 """
+import time
 from fastapi import APIRouter, UploadFile, Request
 from typing import Dict, Any
 import numpy as np
@@ -25,8 +26,8 @@ class ProposeActionProps(BaseModel):
     date: str
     name_to: str
     from_company: str
-    email_address: str
     complaint_reason: str
+    mock: bool = False  # This is used to mock the response to not use ai credits
 
 
 @router.post("/process-pdf")
@@ -90,10 +91,22 @@ async def process_file(request: Request) -> Dict[str, Any]:
         "data": extracted_info.to_dict()
     }
 
+mocked_response = {
+    "status": "success",
+    "message": "Complaint action proposed successfully",
+    "data": {
+        "email_content": "Lore Ipsum dolor sit amet, consectetur adipiscing elit.",
+        "email_address": "test@example.com"
+    }
+}
 
-@router.post("/propose-action")
-async def propose_action(data: ProposeActionProps) -> Dict[str, Any]:
+
+@router.post("/propose-mail")
+async def process_mail(data: ProposeActionProps) -> Dict[str, Any]:
     """This endpoint constructs a mail to an adress to propose a complaint action."""
+
+    if data.mock:
+        return mocked_response
 
     result = await master_search_agent.run(
         f"Find the customer support email address for the company {data.from_company}.",
@@ -123,4 +136,31 @@ async def propose_action(data: ProposeActionProps) -> Dict[str, Any]:
             "email_content": email,
             "email_address": email_address
         }
+    }
+
+
+class FireMailProps(BaseModel):
+    """This model represents the properties required to fire a complaint email."""
+    email_content: str
+    email_address: str
+    mock: bool = False
+
+
+@router.post("/fire-mail")
+async def fire_mail(data: FireMailProps) -> Dict[str, Any]:
+    """This endpoint sends the proposed complaint action email."""
+
+    if data.mock:
+        time.sleep(3)
+        return {
+            "status": "success",
+            "message": "Complaint action email sent successfully",
+        }
+
+    # Here you would implement the actual email sending logic
+    # For example, using an email sending service or library
+
+    return {
+        "status": "success",
+        "message": "Complaint action email sent successfully",
     }
