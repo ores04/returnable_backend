@@ -15,6 +15,6 @@ venv/
 /datasets/
 
 # google cloud credentials
-/server/oauth_client_id.json
+/server/core/email_service/oauth_client_id.json
 
 .idea

@@ -1,5 +1,5 @@
 import json
-from core.ai_clients.openai_client import OpenAIClient
+from server.core.ai_clients.openai_client import OpenAIClient
 
 
 def write_return_mail(customer_number: str | None, invoice_number: str,

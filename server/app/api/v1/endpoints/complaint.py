@@ -12,9 +12,9 @@ from io import BytesIO
 from pydantic import BaseModel
 
 
-from core.invoice_extraction.invoice_image_processing import InvoiceImageProcessing
-from core.agents.contact_information_agent import master_search_agent, SearchDeps, search_usage_limit
-from core.agents.mail_agent import write_return_mail
+from server.core.invoice_extraction.invoice_image_processing import InvoiceImageProcessing
+from server.core.agents.contact_information_agent import master_search_agent, SearchDeps, search_usage_limit
+from server.core.agents.mail_agent import write_return_mail
 
 router = APIRouter()
 
@@ -63,9 +63,10 @@ async def process_pdf(file: UploadFile) -> Dict[str, Any]:
 
 
 @router.post("/process-file")
-async def process_file(request: Request) -> Dict[str, Any]:
+async def process_file(request: Request, is_pdf: bool = False) -> Dict[str, Any]:
     """Accepts raw image bytes in the request body and processes them like /process-pdf."""
     contents = await request.body()
+
 
     try:
         # convert the raw body to a cv2 image
@@ -81,8 +82,8 @@ async def process_file(request: Request) -> Dict[str, Any]:
         }
 
     # use the image processing class to extract information
-    processor = InvoiceImageProcessing(cv2_image)
-    extracted_info = processor.extract_information()
+    processor = InvoiceImageProcessing(cv2_image, _image_pil=image)
+    extracted_info = processor.extract_information(is_pdf)
 
     return {
         "status": "success",

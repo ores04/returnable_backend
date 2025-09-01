@@ -133,3 +133,9 @@ zipp==3.23.0
 google-auth-oauthlib~=1.2.2
 google-api-python-client~=2.179.0
 cryptography~=45.0.6
+numpy~=2.2.6
+opencv-python~=4.12.0.88
+pillow~=11.3.0
+beautifulsoup4~=4.13.5
+pytesseract~=0.3.13
+IMAPClient~=3.0.1

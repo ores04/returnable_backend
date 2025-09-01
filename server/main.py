@@ -5,8 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.api.v1.api import api_router
-from core.config import settings
+from server.app.api.v1.api import api_router
+from server.core.config import settings
 
 from dotenv import load_dotenv
 

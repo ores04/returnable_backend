@@ -8,6 +8,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from cryptography.fernet import Fernet
+from supabase_auth import SignInWithIdTokenCredentials
+
 from .supabase_client import get_supabase_client, TOKEN_TABLE_NAME
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly',
@@ -16,6 +18,8 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.readonly',
 class GmailClient:
 
     def __init__(self, path_to_credentials: str):
+        pwd = os.path.dirname(os.path.abspath(__file__))
+        path_to_credentials = os.path.join(pwd, path_to_credentials)
         self.credentials_path = path_to_credentials
         self.service = None
         # Lade Verschlüsselungsschlüssel aus Umgebungsvariablen
@@ -32,7 +36,7 @@ class GmailClient:
         """Entschlüsselt den Token"""
         return self.cipher_suite.decrypt(encrypted_token.encode()).decode()
 
-    def _authenticate(self, jwt_token: str) -> InstalledAppFlow or None:
+    def authenticate(self, jwt_token: str) -> bool or None:
         """Authentifizierung mit Google API und Supabase. If the user wants to authenticate, returns the OAuth flow to be handled externally."""
         creds = None
 
@@ -47,29 +51,26 @@ class GmailClient:
             creds = Credentials(
                 token=None,
                 refresh_token=refresh_token,
-                token_uri=client_config['installed']['token_uri'],
-                client_id=client_config['installed']['client_id'],
-                client_secret=client_config['installed']['client_secret']
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id= os.getenv("GMAIL_CLIENT_ID"),
+                client_secret=os.getenv("GMAIL_CLIENT_SECRET"),
+                scopes=SCOPES,
+
             )
+            print("Erstellte Credentials aus gespeichertem Refresh Token")
 
-        # Wenn keine gültigen Credentials, führe OAuth Flow durch
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-                # Speichere neuen Refresh Token
-                if creds.refresh_token:
-                    self.save_refresh_token_to_supabase(jwt_token, creds.refresh_token)
-
-                self.service = build('gmail', 'v1', credentials=creds)
-                return None
-
-
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.credentials_path, SCOPES)
-
-                return flow
-        return None
+        try:
+            print("Attempting to refresh the access token...")
+            creds.refresh(Request())
+            print("Access token refreshed successfully.")
+            self.service = build('gmail', 'v1', credentials=creds)
+            print("Google API service created successfully.")
+            return None
+        except Exception as e:
+            print(f"Error: The refresh token may be invalid or revoked. {e}")
+            # This is where you would typically trigger a re-authentication flow
+            # for the user.
+            return False
 
     def save_refresh_token_to_supabase(self, jwt_token: str, refresh_token: str) -> int or None:
         """Speichert verschlüsselten Refresh Token in Supabase"""
@@ -79,7 +80,8 @@ class GmailClient:
 
             supabase = get_supabase_client(jwt_token)
 
-            uid = supabase.auth.get_user().user.id
+            uid = supabase.auth.get_user(jwt_token).user.id
+            print(f"Speichere Refresh Token für User ID: {uid}")
 
             # update the refresh token or insert if not exists
             result = supabase.from_(TOKEN_TABLE_NAME).upsert({
@@ -88,12 +90,11 @@ class GmailClient:
                 'token': encrypted_token
             }, on_conflict='user_id').execute()
 
-            if result.error:
-                print(f"Fehler beim Speichern des Refresh Tokens: {result.error.message}")
-                return None
-            else:
-                print("Refresh Token erfolgreich gespeichert")
-                return 200
+            result.raise_when_api_error(result)
+
+
+            print("Refresh Token erfolgreich gespeichert")
+            return 200
 
         except Exception as e:
             print(f"Fehler beim Speichern des Refresh Tokens: {e}")
@@ -104,12 +105,13 @@ class GmailClient:
         try:
             supabase = get_supabase_client(jwt_token)
 
-            uid = supabase.auth.get_user().user.id
+            uid = supabase.auth.get_user(jwt_token).user.id
 
             result = supabase.from_(TOKEN_TABLE_NAME).select('token').eq('user_id', uid).eq('provider', 'google').execute()
 
             if result.data and len(result.data) > 0:
                 encrypted_token = result.data[0]['token']
+                print("Refresh Token erfolgreich geladen für User ID:", uid)
                 return self._decrypt_token(encrypted_token)
         except Exception as e:
             print(f"Fehler beim Laden des Refresh Tokens: {e}")
@@ -118,13 +120,12 @@ class GmailClient:
     def read_new_mails(self, jwt_token: str, max_results: int = 10):
         """Liest neue E-Mails"""
         if not self.service:
-            self._authenticate(jwt_token)
+            self.authenticate(jwt_token)
 
         try:
             # Hole ungelesene E-Mails
             results = self.service.users().messages().list(
                 userId='me',
-                q='is:unread',
                 maxResults=max_results
             ).execute()
 
@@ -162,26 +163,58 @@ class GmailClient:
             print(f"Fehler beim Lesen der E-Mails: {e}")
             return []
 
+
     def _extract_body(self, payload):
-        """Extrahiert E-Mail Body aus Payload"""
-        body = ""
+        """
+        Extrahiert den E-Mail-Body aus der Payload.
+        Durchsucht rekursiv alle Teile der Nachricht, um den Text- oder HTML-Inhalt zu finden.
+        Bevorzugt 'text/plain', greift aber auf 'text/html' zurück, falls ersteres nicht vorhanden ist.
 
-        if 'parts' in payload:
-            for part in payload['parts']:
-                if part['mimeType'] == 'text/plain':
-                    data = part['body']['data']
-                    body = base64.urlsafe_b64decode(data).decode('utf-8')
+        (EN: Extracts the email body from the payload.
+         Recursively searches all parts of the message to find the text or HTML content.
+         Prefers 'text/plain' but falls back to 'text/html' if the former is not available.)
+        """
+        text_body = ""
+        html_body = ""
+
+        # Use a queue for a breadth-first search of the payload parts
+        parts_to_process = [payload]
+
+        while parts_to_process:
+            part = parts_to_process.pop(0)
+            mime_type = part.get('mimeType')
+
+            # --- Case 1: The part contains the actual body data ---
+            # Check for 'data' in the 'body' object
+            if 'data' in part.get('body', {}):
+                body_data = part['body']['data']
+
+                if mime_type == 'text/plain':
+                    # We found a plain text part. Decode it and we can consider our job done
+                    # because we prefer plain text.
+                    decoded_data = base64.urlsafe_b64decode(body_data).decode('utf-8')
+                    text_body = decoded_data
+                    # We can break here because plain text is our first priority.
                     break
-        elif payload['mimeType'] == 'text/plain':
-            data = payload['body']['data']
-            body = base64.urlsafe_b64decode(data).decode('utf-8')
 
-        return body
+                elif mime_type == 'text/html':
+                    # We found an HTML part. Decode it and store it.
+                    # We'll continue searching in case a plain text part exists.
+                    decoded_data = base64.urlsafe_b64decode(body_data).decode('utf-8')
+                    html_body = decoded_data
+
+            # --- Case 2: The part is a container for more parts ---
+            # If the part has sub-parts, add them to our queue to be processed.
+            if 'parts' in part:
+                parts_to_process.extend(part['parts'])
+
+        # Return the plain text body if we found it, otherwise return the HTML body.
+        return text_body if text_body else html_body
 
     def send_mail(self, jwt_token: str, to: str, subject: str, body: str):
         """Sendet eine E-Mail"""
         if not self.service:
-            self._authenticate(jwt_token)
+            self.authenticate(jwt_token)
 
         try:
             message = MIMEMultipart()

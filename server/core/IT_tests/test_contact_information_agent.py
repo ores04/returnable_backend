@@ -1,5 +1,4 @@
-import pytest
-from core.agents.contact_information_agent import extract_email_from_text
+from server.core.agents.contact_information_agent import extract_email_from_text
 
 
 class TestExtractEmailFromText:

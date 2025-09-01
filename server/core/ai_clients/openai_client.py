@@ -65,3 +65,4 @@ class OpenAIClient:
             input=text,
         )
         return response.content
+

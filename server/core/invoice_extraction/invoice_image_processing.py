@@ -1,7 +1,13 @@
+import base64
 import json
+from io import BytesIO
+
 import cv2
 import pytesseract
+from PIL import Image
 
+from server.core.ai_clients.mistal_ai_client import MistralAiClient
+from server.core.invoice_extraction.invoice_image_processing_using_openai import LLMImageProcessor
 from ..ai_clients.openai_client import OpenAIClient
 
 from pydantic import BaseModel
@@ -69,8 +75,9 @@ class InvoiceInformation(BaseModel):
 
 class InvoiceImageProcessing:
 
-    def __init__(self, image: cv2.Mat):
+    def __init__(self, image, _image_pil:Image =None):
         self.image = image
+        self.pil_image: Image = _image_pil
         self.ocr_engine = pytesseract.pytesseract
 
     def preprocess_image(self):
@@ -198,19 +205,24 @@ class InvoiceImageProcessing:
         # Return the final structure as a formatted JSON string
         return json.dumps(root.get('children', []), indent=2, ensure_ascii=False)
 
-    def extract_information(self) -> InvoiceInformation:
+    def extract_information(self, is_pdf: bool) -> InvoiceInformation:
         """
         Extract specific information from the processed image.
         This can be extended to extract fields like invoice number, date, total amount, etc.
         """
-        text_dict = self.process_image()
-        print("Extracted text without prep:", text_dict)
-        print("Extracted text:", self.group_text_by_indent_refactored(text_dict))
-        text = self.group_text_by_indent_refactored(text_dict)
+        mistal_client = MistralAiClient()
 
-        client = OpenAIClient()
+        im_file = BytesIO()
+        self.pil_image.save(im_file, format="JPEG")
+        im_bytes = im_file.getvalue()  # im_bytes: image in binary format.
+        im_b64 = base64.b64encode(im_bytes)
 
-        response = client.request_text_model(
+        text = LLMImageProcessor(mistal_client).process_image(im_b64, is_pdf)
+        print("Extracted text from OCR:", text)
+
+        openai_client = OpenAIClient()
+
+        response = openai_client.request_text_model(
             instruction=INVOICE_EXTRACTION_PROMT,
             prompt=text,
             model="gpt-4o",
