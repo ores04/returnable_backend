@@ -6,11 +6,15 @@ from supabase import create_client, Client
 from supabase.lib.client_options import SyncClientOptions
 from supabase_auth import SignInWithPasswordCredentials, SignInWithEmailAndPasswordCredentials, AuthResponse
 
+from server.core.agents.email_reply_service import TodoItem, InputItem
+
 load_dotenv()
 
 TOKEN_TABLE_NAME = "REFRESH_TOKEN"
 RETURNABLE_REQUEST_TABLE_NAME = "RETURN_REQUEST"
 ACTION_TABLE_NAME = "ACTION_STEPS"
+RETURN_TASKS_TABLE_NAME = "RETURN_TASKS"
+RETURN_MAILS_TABLE_NAME = "RETURN_MAILS"
 
 url: str = os.environ.get("SUPABASE_URL", None)
 key: str = os.environ.get("SUPABASE_KEY", None)
@@ -34,6 +38,13 @@ def get_supabase_client(acsess_token:str) -> Client:
             "Authorization": f"Bearer {acsess_token}"
         }
     ))
+
+def get_supabase_service_role_client() -> Client:
+    """This function returns a supabase client with the service role key. Use only if absolutely necessary."""
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", None)
+    if key is None:
+        raise Exception("Supabase service role key is not set")
+    return create_client(supabase_url=url, supabase_key=key)
 
 
 def get_auth_client_from_username_password(username: str, password: str) -> AuthResponse:
@@ -101,3 +112,49 @@ def add_action_to_db(jwt_token: str, action_data: dict):
     response.raise_when_api_error(response)
 
     return response.data
+
+def get_all_active_returnable_requests(service_client: Client):
+    """This function returns all active returnable requests from the database."""
+    response = service_client.table(RETURNABLE_REQUEST_TABLE_NAME).select("*").eq("active", "true").execute()
+    response.raise_when_api_error(response)
+    return response.data
+
+def get_latest_mail_with_returnable_id(service_client: Client, returnable_id: str) -> dict:
+    """This function returns all mails with the given returnable id from the database."""
+    response = service_client.table(RETURN_MAILS_TABLE_NAME).select("*").eq("return_request_id", returnable_id).order(
+        "created_at", desc=True
+    ).limit(1).execute()
+    response.raise_when_api_error(response)
+    return response.data[0] if response.data and len(response.data) > 0 else {}
+
+def add_task_to_db(service_client: Client, task: TodoItem| InputItem, returnable_id: str):
+    """This function adds a new task to the database."""
+    task_data = {
+        "type": task.requested_type,
+        "return_request_id": returnable_id,
+        "text": task.text,
+    }
+
+    response = service_client.table(RETURN_TASKS_TABLE_NAME).insert(task_data).execute()
+    response.raise_when_api_error(response)
+
+    return response.data
+
+def add_mail_to_db(jwt_token: str | None, service_client: Client | None, mail_data: dict, returnable_id: str, send_by_me: bool = False):
+    """This function adds a new mail to the database."""
+    assert jwt_token or service_client, "Either jwt_token or service_client must be set"
+    if jwt_token:
+        service_client = get_supabase_client(acsess_token=jwt_token)
+    mail_data = {
+        "return_request_id": returnable_id,
+        "to" : mail_data.get("sender"), # this is in fact the mail exchange partner
+        "send_by_me": send_by_me,
+        "body": mail_data.get("body"),
+        "subject": mail_data.get("subject"),
+    }
+
+    response = service_client.table(RETURN_MAILS_TABLE_NAME).insert(mail_data).execute()
+    response.raise_when_api_error(response)
+
+    return response.data
+

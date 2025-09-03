@@ -123,26 +123,27 @@ class EmailReplyService:
         return [task for task in tasks if int(task.id) not in ids_to_remove]
 
 
-
-
-class TodoItem(BaseModel):
-    """This model represents a to_do that the user has to do."""
-    id: str
-    description: str
-
-    def __str__(self):
-        return f"TodoItem(id={self.id}, description={self.description})"
-
 class RequestedType(str, Enum):
     """This enum represents the type of input that is requested."""
     TEXT = "text"
     NUMBER = "number"
     IMAGE = "image"
+    TODO = "todo"
+
+class TodoItem(BaseModel):
+    """This model represents a to_do that the user has to do."""
+    id: str
+    description: str
+    requested_type: RequestedType = RequestedType.TODO
+
+    def __str__(self):
+        return f"TodoItem(id={self.id}, description={self.description})"
+
 
 class InputItem(BaseModel):
     """This model represents an input that the user has to provide."""
     id: str
-    requested_input: str
+    description: str
     requested_type: RequestedType
 
     def __str__(self):

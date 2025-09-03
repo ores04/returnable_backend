@@ -10,7 +10,7 @@ from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel
 from typing import Optional, List
 from server.core.email_service.gmail_client import GmailClient
-from server.core.email_service.supabase_client import add_returnable_request_to_db, add_action_to_db
+from server.core.email_service.supabase_client import add_returnable_request_to_db, add_action_to_db, add_mail_to_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -190,15 +190,16 @@ async def send_mail(mail_request: SendMailRequest, token: str = Depends(oauth2_s
             # set the to a test adress
             mail_request.to = os.getenv("TEST_EMAIL_ADDRESS", "Not set :/")
             print("DEBUG mode is on. Overriding recipient to:", mail_request.to)
-        """
+
         message_id = gmail_client.send_mail(
             jwt_token=token,
+            service_client=None,
+            uuid=None,
             to=mail_request.to,
             subject=mail_request.subject,
             body=mail_request.body
         )
-"""
-        message_id = 123456  # Mock message ID for demonstration purposes
+
 
         # if is_return_request is True then we add a returnable request to the database
         if mail_request.is_return_request and not mail_request.returnable_request_data:
@@ -217,6 +218,17 @@ async def send_mail(mail_request: SendMailRequest, token: str = Depends(oauth2_s
                 add_action_to_db(token, action)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed to add action request to database: {str(e)}")
+                # we don't raise an error here because the main action (sending the mail and adding the request) was successful
+
+            try:
+                mail_data = {
+                    "subject": mail_request.subject,
+                    "sender": mail_request.to,
+                    "body": mail_request.body,
+                }
+                add_mail_to_db(jwt_token=token, service_client=None, mail_data=mail_data, returnable_id=data.get("id"), send_by_me =True)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to add mail to database: {str(e)}")
                 # we don't raise an error here because the main action (sending the mail and adding the request) was successful
 
         if message_id:
@@ -242,7 +254,7 @@ async def get_newest_mails(
     """Ruft die neuesten ungelesenen E-Mails ab"""
     try:
         # Authentifizierung prüfen
-        flow = gmail_client.authenticate(token)
+        flow = gmail_client.authenticate(token, None,None)
         if flow is not None:
             raise HTTPException(
                 status_code=401,

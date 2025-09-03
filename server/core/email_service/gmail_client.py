@@ -5,10 +5,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from cryptography.fernet import Fernet
-from supabase_auth import SignInWithIdTokenCredentials
+from supabase import Client
+
 
 from .supabase_client import get_supabase_client, TOKEN_TABLE_NAME
 
@@ -36,12 +36,12 @@ class GmailClient:
         """Entschlüsselt den Token"""
         return self.cipher_suite.decrypt(encrypted_token.encode()).decode()
 
-    def authenticate(self, jwt_token: str) -> bool or None:
+    def authenticate(self, jwt_token: str | None, service_client: Client | None, uuid: str | None) -> bool or None:
         """Authentifizierung mit Google API und Supabase. If the user wants to authenticate, returns the OAuth flow to be handled externally."""
         creds = None
 
         # Versuche Refresh Token aus Supabase zu laden
-        refresh_token = self.get_refresh_token_from_supabase(jwt_token)
+        refresh_token = self.get_refresh_token_from_supabase(jwt_token, service_client, uuid)
 
         if refresh_token:
             # Erstelle Credentials aus Refresh Token
@@ -100,12 +100,16 @@ class GmailClient:
             print(f"Fehler beim Speichern des Refresh Tokens: {e}")
             return 503
 
-    def get_refresh_token_from_supabase(self, jwt_token: str) -> str:
+    def get_refresh_token_from_supabase(self, jwt_token: str | None, service_client: Client | None, uuid: str | None) -> str:
         """Lädt und entschlüsselt Refresh Token aus Supabase"""
+        assert jwt_token or (service_client and uuid), "Entweder jwt_token oder service_client und uuid müssen gesetzt sein"
         try:
-            supabase = get_supabase_client(jwt_token)
-
-            uid = supabase.auth.get_user(jwt_token).user.id
+            if jwt_token:
+                supabase = get_supabase_client(jwt_token)
+                uid = supabase.auth.get_user(jwt_token).user.id
+            else:
+                supabase = service_client
+                uid = uuid
 
             result = supabase.from_(TOKEN_TABLE_NAME).select('token').eq('user_id', uid).eq('provider', 'google').execute()
 
@@ -117,10 +121,10 @@ class GmailClient:
             print(f"Fehler beim Laden des Refresh Tokens: {e}")
         return None
 
-    def read_new_mails(self, jwt_token: str, max_results: int = 10):
+    def read_new_mails(self, jwt_token: str | None, service_client: Client | None, uuid: str | None, max_results: int = 10) -> list[dict]:
         """Liest neue E-Mails"""
         if not self.service:
-            self.authenticate(jwt_token)
+            self.authenticate(jwt_token, service_client, uuid)
 
         try:
             # Hole ungelesene E-Mails
@@ -211,10 +215,10 @@ class GmailClient:
         # Return the plain text body if we found it, otherwise return the HTML body.
         return text_body if text_body else html_body
 
-    def send_mail(self, jwt_token: str, to: str, subject: str, body: str):
+    def send_mail(self, jwt_token: str, service_client: Client| None, uuid: str | None, to: str, subject: str, body: str):
         """Sendet eine E-Mail"""
         if not self.service:
-            self.authenticate(jwt_token)
+            self.authenticate(jwt_token, service_client, uuid)
 
         try:
             message = MIMEMultipart()
