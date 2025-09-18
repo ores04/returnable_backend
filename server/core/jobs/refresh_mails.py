@@ -50,7 +50,7 @@ def process_request(returnable_request: dict, service_client: Client):
     assert return_request_id is not None, "Returnable request must have an ID"
 
     latest_mail_for_request = get_latest_mail_with_returnable_id(service_client, return_request_id)
-    if latest_mail_for_request.get("send_by_me") != "True":
+    if not bool(latest_mail_for_request.get("send_by_me")):
         print("Skipping because company already replied or no mail was sent at all. We must now take an action")
         return
 

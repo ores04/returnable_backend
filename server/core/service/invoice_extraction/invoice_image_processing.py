@@ -6,11 +6,13 @@ import cv2
 import pytesseract
 from PIL import Image
 
-from server.core.ai_clients.mistal_ai_client import MistralAiClient
-from server.core.invoice_extraction.invoice_image_processing_using_openai import LLMImageProcessor
-from ..ai_clients.openai_client import OpenAIClient
+
 
 from pydantic import BaseModel
+
+from server.core.ai.agents.invoice_image_processing_using_llm import LLMImageProcessor
+from server.core.ai.ai_clients.mistal_ai_client import MistralAiClient
+from server.core.ai.ai_clients.openai_client import OpenAIClient
 
 INVOICE_EXTRACTION_PROMT = """
 The information in the promt is extracted via OCR from an invoice image. Please extract the following information from the text:

@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 from supabase import Client
 
 
-from .supabase_client import get_supabase_client, TOKEN_TABLE_NAME
+from server.core.service.supabase_connectors.supabase_client import get_supabase_client, TOKEN_TABLE_NAME
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly',
           'https://www.googleapis.com/auth/gmail.send']

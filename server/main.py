@@ -40,7 +40,7 @@ def create_application() -> FastAPI:
             allow_origins=[str(origin)
                            for origin in settings.BACKEND_CORS_ORIGINS],
             allow_credentials=True,
-            allow_methods=["*"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["*"],
         )
 
@@ -51,3 +51,6 @@ def create_application() -> FastAPI:
 
 
 app = create_application()
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the API. Visit /docs for API documentation."}

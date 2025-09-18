@@ -9,8 +9,10 @@ from google.auth.exceptions import OAuthError
 from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel
 from typing import Optional, List
-from server.core.email_service.gmail_client import GmailClient
-from server.core.email_service.supabase_client import add_returnable_request_to_db, add_action_to_db, add_mail_to_db
+
+from server.core.service.email_service.gmail_client import GmailClient
+from server.core.service.supabase_connectors.supabase_client import add_returnable_request_to_db, add_action_to_db, \
+    add_mail_to_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -179,7 +181,7 @@ async def send_mail(mail_request: SendMailRequest, token: str = Depends(oauth2_s
     """Sendet eine E-Mail über Gmail"""
     try:
         # Authentifizierung prüfen
-        flow = gmail_client.authenticate(token)
+        flow = gmail_client.authenticate(token, None, None)
         if flow is not None:
             raise HTTPException(
                 status_code=401,
@@ -226,7 +228,7 @@ async def send_mail(mail_request: SendMailRequest, token: str = Depends(oauth2_s
                     "sender": mail_request.to,
                     "body": mail_request.body,
                 }
-                add_mail_to_db(jwt_token=token, service_client=None, mail_data=mail_data, returnable_id=data.get("id"), send_by_me =True)
+                add_mail_to_db(jwt_token=token, service_client=None, mail_data=mail_data, returnable_id=data[0].get("id"), send_by_me =True)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed to add mail to database: {str(e)}")
                 # we don't raise an error here because the main action (sending the mail and adding the request) was successful

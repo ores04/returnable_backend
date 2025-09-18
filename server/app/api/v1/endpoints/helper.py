@@ -1,11 +1,10 @@
-import supabase
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from supabase_auth import AuthResponse
-from supabase_auth.http_clients import SyncClient
 
-from server.core.email_service.supabase_client import get_auth_client_from_username_password, get_supabase_client
+from server.core.service.supabase_connectors.supabase_client import get_supabase_client, \
+    get_auth_client_from_username_password
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

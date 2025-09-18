@@ -1,6 +1,6 @@
 from mistralai import OCRResponse
 
-from server.core.ai_clients.mistal_ai_client import MistralAiClient
+from server.core.ai.ai_clients.mistal_ai_client import MistralAiClient
 
 
 class LLMImageProcessor:

@@ -1,9 +1,18 @@
 import json
-from server.core.ai_clients.openai_client import OpenAIClient
+from typing import Any
 
+from pydantic import BaseModel
+
+from server.core.ai.ai_clients.openai_client import OpenAIClient
+
+
+class MailResponse(BaseModel):
+    body: str
+    subject: str
 
 def write_return_mail(customer_number: str | None, invoice_number: str,
-                      date: str, name_to: str, from_company: str, reclamation_reason: str) -> str:
+                      date: str, name_to: str, from_company: str, reclamation_reason: str) -> tuple[str, None] | tuple[
+    Any, Any]:
     """
     This function generates a mail for the customer to request a return.
     """
@@ -29,12 +38,13 @@ def write_return_mail(customer_number: str | None, invoice_number: str,
         instruction=instruction,
         prompt=json.dumps(mail_information, ensure_ascii=False),
         model="gpt-5-mini",
+        response_model=MailResponse,
     )
 
     if isinstance(response, str):
-        return response.strip()
-    elif isinstance(response, dict) and 'text' in response:
-        return response['text'].strip()
+        return response.strip(), None
+    elif isinstance(response, BaseModel):
+        return response.body.strip(), response.subject
     else:
         raise ValueError(
             "Unexpected response format from OpenAI API. Expected a string or dict with 'text' key.")

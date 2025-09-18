@@ -10,11 +10,12 @@ from PIL import Image
 from io import BytesIO
 
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException
 
-
-from server.core.invoice_extraction.invoice_image_processing import InvoiceImageProcessing
-from server.core.agents.contact_information_agent import master_search_agent, SearchDeps, search_usage_limit
-from server.core.agents.mail_agent import write_return_mail
+from server.core.ai.agents.contact_information_agent import master_search_agent, SearchDeps, search_usage_limit
+from server.core.ai.agents.email_reply_service import InputItem, TodoItem
+from server.core.ai.agents.mail_agent import write_return_mail
+from server.core.service.invoice_extraction.invoice_image_processing import InvoiceImageProcessing
 
 router = APIRouter()
 
@@ -98,8 +99,24 @@ mocked_response = {
     "data": {
         "email_content": "Lore Ipsum dolor sit amet, consectetur adipiscing elit.",
         "email_address": "test@example.com"
+        ,"email_subject": "Complaint regarding invoice #12345"
     }
 }
+
+class ProposeReplyProps(BaseModel):
+    """This model represents the properties required to propose a reply to a complaint email."""
+    original_mail: str
+    reply_mail: str
+    address: str
+    done_todos : list[TodoItem | InputItem] = []
+    mock: bool = False
+
+@router.post("/propose-reply")
+async def propose_reply(data: ProposeReplyProps) -> Dict[str, Any]:
+    if data.mock:
+        return mocked_response
+
+    raise HTTPException(status_code=501, detail="Not implemented yet")
 
 
 @router.post("/propose-mail")
@@ -122,7 +139,7 @@ async def process_mail(data: ProposeActionProps) -> Dict[str, Any]:
             "message": "Could not find a customer support email address."
         }
 
-    email = write_return_mail(
+    email, subject = write_return_mail(
         customer_number=data.customer_number,
         invoice_number=data.invoice_number,
         date=data.date,
@@ -130,12 +147,15 @@ async def process_mail(data: ProposeActionProps) -> Dict[str, Any]:
         from_company=data.from_company,
         reclamation_reason=data.complaint_reason
     )
+    print(email)
+    print(subject)
     return {
         "status": "success",
         "message": "Complaint action proposed successfully",
         "data": {
             "email_content": email,
-            "email_address": email_address
+            "email_address": email_address,
+            "email_subject": subject
         }
     }
 

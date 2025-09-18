@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.usage import UsageLimits
 
-from server.core.ai_clients.openai_client import OpenAIClient
+from server.core.ai.agents.agent_prompts import MASTER_REPLY_AGENT_PROMPT, CHECK_AGENT_PROMPT
+from server.core.ai.ai_clients.openai_client import OpenAIClient
 
 SMART_MODEL = "openai:gpt-5"
 CHEAP_MODEL = "openai:gpt-5-mini"
@@ -86,7 +87,7 @@ class EmailReplyService:
         response = client.request_text_model(
             instruction="Beantworte die Frage mit Ja oder Nein.",
             prompt=PROMPT(email_sent, email_reply),
-            model="gpt-5-nano",
+            model="gpt-5-nano", 
         )
 
         return "Ja" in response
@@ -131,7 +132,7 @@ class RequestedType(str, Enum):
     TODO = "todo"
 
 class TodoItem(BaseModel):
-    """This model represents a to_do that the user has to do."""
+    """This model represents a to_do that the user has to do. An example would be: 'Handy neu gestartet'"""
     id: str
     description: str
     requested_type: RequestedType = RequestedType.TODO
@@ -141,13 +142,13 @@ class TodoItem(BaseModel):
 
 
 class InputItem(BaseModel):
-    """This model represents an input that the user has to provide."""
+    """This model represents an input that the user has to provide. An example would be 'Gerätenummer des Handys'"""
     id: str
     description: str
     requested_type: RequestedType
 
     def __str__(self):
-        return f"InputItem(id={self.id}, requested_input={self.requested_input})"
+        return f"InputItem(id={self.id}, requested_input={self.description})"
 
 class EmailProcessingResult(BaseModel):
     """ This model represents the result of processing the reply email."""
@@ -179,15 +180,8 @@ class ReplyDeps:
     tasks: List[TodoItem | InputItem] = field(default_factory=list)
 
 master_reply_agent = Agent(
-    CHEAP_MODEL,
-    system_prompt="You are tasked with finding out what actions the user needs to take to respond to a reply email from a company. "
-                  " Your task is to analyze the reply email and determine if any further actions are required from the user. If any actions are "
-                  "required to fulfill the mails intend, create a to-do item for each action using the create_todo tool."
-                  "ONLY ADD TODOS THAT ARE REQUESTED BY THE COMPANY IN THE REPLY EMAIL. Do not add any other tasks."
-                  " If you need more information from the user to answer the email create an input item using the request_input tool. After creating the "
-                  "to-do and input items use the check tool to check if you have everything you need to answer the email."
-                  "If the check is CheckOk return the todos and a summary, if not refine accordingly and check again. ",
-
+    SMART_MODEL,
+    system_prompt=MASTER_REPLY_AGENT_PROMPT,
     instrument=True,
     deps_type=ReplyDeps,
     output_type=EmailProcessingResult,
@@ -195,10 +189,7 @@ master_reply_agent = Agent(
 
 check_agent = Agent(
     CHEAP_MODEL,
-    system_prompt="You are a superviser to check if the mail from the company can be answerd if the todos are fulfilled."
-                  "Check if in the mail are tasks mentioned that are no yet the task list."
-                  "Only return not okay if something is missing. Do not return not okay if everything is fine."
-                  " If everything is okay, use the CheckOkay tool to confirm. If something is missing, use the CheckNotOkay tool to explain what is missing.",
+    system_prompt=CHECK_AGENT_PROMPT,
     deps_type=ReplyDeps,
     output_type=[CheckOkay | CheckNotOkay],
     instrument=True,
@@ -229,7 +220,7 @@ def create_todo(ctx: RunContext[ReplyDeps], description: str) -> TodoItem:
 @master_reply_agent.tool
 def request_input(ctx: RunContext[ReplyDeps], requested_input: str) -> InputItem:
     """ This toolcreate a requests an input from the user. Request exactly one input per call."""
-    new_input = InputItem(id=str(len(ctx.deps.tasks) + 1), requested_input=requested_input)
+    new_input = InputItem(id=str(len(ctx.deps.tasks) + 1), description=requested_input, requested_type=RequestedType.TEXT)
     ctx.deps.tasks.append(new_input)
     return new_input
 
