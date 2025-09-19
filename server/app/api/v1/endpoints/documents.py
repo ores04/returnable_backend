@@ -104,18 +104,20 @@ def handle_request(data: dict):
                     if 'messages' in change['value']:
                         message = change['value']['messages'][0]
                         message_type = message['type']
+                        phone_number = change['contacts']['wa_id']
 
                         if message_type == "image":
                             media_id = message['image']['id']
                             mime_type = message['image']['mime_type']
-                            handle_media_message(media_id, mime_type)
+                            handle_media_message(media_id, mime_type, phone_number,None)
 
                         elif message_type == "document":
                             media_id = message['document']['id']
                             mime_type = message['document']['mime_type']
                             filename = message['document'].get('filename',
                                                                'downloaded_file')  # Use provided filename or a default
-                            handle_media_message(media_id, mime_type, filename)
+                            handle_media_message(media_id, mime_type,phone_number, filename)
+
 
                         # Add handlers for other types like 'audio', 'video', 'sticker' if needed
                 print("Finished processing entry:", entry["id"])

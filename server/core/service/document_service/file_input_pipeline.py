@@ -1,8 +1,11 @@
 from pydantic import BaseModel
 
+from supabase import Client
+
 from server.core.ai.ai_clients.openai_client import OpenAIClient
 from server.core.service.document_service.chunking import chunk_text
-from server.core.service.supabase_connectors.supabase_client import add_document_to_db
+from server.core.service.supabase_connectors.supabase_client import add_document_to_db, add_keywords_to_db
+
 
 class DocumentKeyword(BaseModel):
     keyword: str
@@ -12,11 +15,11 @@ class DocumentKeywords(BaseModel):
 
 
 
-def process_text_input(text: str, title: str, jwt_token: str) -> str:
+def process_text_input(text: str, title: str, jwt_token: str|None, supabase_client:Client = None) -> str:
     """
     Processes the input text and returns True if successful.
 
-    Args:
+    Args:d
         text (str): The text to be processed.
         title (str): The title of the document.
         jwt_token (str): The JWT token for authentication.
@@ -40,12 +43,12 @@ def process_text_input(text: str, title: str, jwt_token: str) -> str:
     document_dict = {"name": title,
                      "document_segments": [{"embedding": emb} for emb in embeddings]}
 
-    doc_id = add_document_to_db(jwt_token=jwt_token, document_data=document_dict)
+    doc_id = add_document_to_db(jwt_token=jwt_token, document_data=document_dict, supabase_client=supabase_client)
 
     # add keywords to db
     for kw in keywords:
         kw_dict = {"name": kw, "embedding": openai_client.get_embedding(kw), "document_id": doc_id}
-        add_document_to_db(jwt_token=jwt_token, document_data=kw_dict)
+        add_keywords_to_db(jwt_token=jwt_token, document_data=kw_dict, supabase_client=supabase_client)
 
     return doc_id
 
