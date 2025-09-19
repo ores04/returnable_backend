@@ -1,4 +1,5 @@
 import os
+import logfire
 
 from google import genai
 from google.genai.types import GenerateImagesConfig
@@ -31,7 +32,7 @@ class GoogleAiClient:
 
         image.generated_images[0].image.save(output_file)
 
-        print(
+        logfire.info(
             f"Created output image using {len(image.generated_images[0].image.image_bytes)} bytes"
         )
         # Example response:
@@ -45,4 +46,4 @@ if __name__ == "__main__":
     client = GoogleAiClient()
     client.generate_image(
         "A futuristic city skyline at sunset", "output_image.png")
-    print("Image generation complete.")
+    logfire.info("Image generation complete.")

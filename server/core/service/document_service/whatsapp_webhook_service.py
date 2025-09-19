@@ -1,6 +1,7 @@
 import os
 from datetime import time
 from io import BytesIO
+import logfire
 
 import requests
 from PIL import Image
@@ -17,7 +18,7 @@ API_VERSION = "v22.0"  # Update as needed
 DEBUG = os.getenv("DEBUG", "false")
 
 if VERIFY_TOKEN == "not_set" or ACCESS_TOKEN == "not_set":
-    print("Warning: WhatsApp tokens are not set. Please set the environment variables WHATSAPP_VERIFY_TOKEN and WHATSAPP_ACSESS_TOKEN.")
+    logfire.warning("Warning: WhatsApp tokens are not set. Please set the environment variables WHATSAPP_VERIFY_TOKEN and WHATSAPP_ACSESS_TOKEN.")
 
 
 def handle_media_message(media_id, mime_type, phone_number, filename=None,):
@@ -46,7 +47,7 @@ def handle_media_message(media_id, mime_type, phone_number, filename=None,):
 
         if DEBUG:
             save_path = write_file_to_disk(filename, media_response)
-            print(f"Successfully downloaded and saved: {save_path}")
+            logfire.info(f"Successfully downloaded and saved: {save_path}")
 
         # save file to supabase
         current_date = time().strftime(format="%Y/%m/%d")
@@ -62,7 +63,7 @@ def handle_media_message(media_id, mime_type, phone_number, filename=None,):
             process_document(media_response.content, filename, None)
 
     except requests.exceptions.RequestException as e:
-        print(f"Error handling media message: {e}")
+        logfire.error(f"Error handling media message: {e}")
 
 async def process_document(contents, doc_title, token):
     image = Image.open(BytesIO(contents))
@@ -87,7 +88,7 @@ def write_file_to_disk(filename, media_response):
         with open(save_path, 'xb') as f:
             f.write(media_response.content)
     except FileExistsError:
-        print(f"File {save_path} already exists. Overwriting.")
+        logfire.info(f"File {save_path} already exists. Overwriting.")
         with open(save_path, 'wb') as f:
             f.write(media_response.content)
     return save_path
@@ -95,7 +96,7 @@ def write_file_to_disk(filename, media_response):
 
 # --- PROCESSING FUNCTIONS (YOUR CUSTOM LOGIC) ---
 def process_pdf(file_path):
-    print(f"Processing PDF: {file_path}")
+    logfire.info(f"Processing PDF: {file_path}")
     # Example: Use a library like PyMuPDF (fitz) or pdfplumber to extract text
     # import fitz
     # with fitz.open(file_path) as doc:
@@ -106,7 +107,7 @@ def process_pdf(file_path):
 
 
 def process_image(file_path):
-    print(f"Processing Image: {file_path}")
+    logfire.info(f"Processing Image: {file_path}")
     # Example: Use a library like Pillow for image manipulation or
     # send it to a cloud AI service like Google Vision or AWS Rekognition for analysis.
     # from PIL import Image

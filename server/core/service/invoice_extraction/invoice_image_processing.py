@@ -1,5 +1,6 @@
 import base64
 import json
+import logfire
 from io import BytesIO
 
 import cv2
@@ -220,7 +221,7 @@ class InvoiceImageProcessing:
         im_b64 = base64.b64encode(im_bytes)
 
         text = LLMImageProcessor(mistal_client).process_image(im_b64, is_pdf)
-        print("Extracted text from OCR:", text)
+        logfire.info("Extracted text from OCR:", text)
 
         openai_client = OpenAIClient()
 
@@ -253,4 +254,4 @@ if __name__ == "__main__":
     # Now you can use the cv2_image with your InvoiceImageProcessing class
     processor = InvoiceImageProcessing(cv2_image)
     extracted_text = processor.extract_information()
-    print("Extracted text:", extracted_text)
+    logfire.info("Extracted text:", extracted_text)

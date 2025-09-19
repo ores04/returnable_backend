@@ -23,9 +23,6 @@ SMART_MODEL = CHEAP_MODEL
 load_dotenv()
 
 
-logfire.configure()
-logfire.instrument_pydantic_ai()
-
 class RemoveIds(BaseModel):
     """ This model is used to remove ids from the tasks and inputs."""
     ids: List[int]
@@ -292,12 +289,12 @@ if __name__ == "__main__":
 
      # Print the results
 
-    print("Tasks to do:")
+    logfire.info("Tasks to do:")
     for task in result.tasks:
-        print(task)
+        logfire.info(task)
 
-    print("\nSummary:")
-    print(result.summary)
+    logfire.info("\nSummary:")
+    logfire.info(result.summary)
 
 
 
