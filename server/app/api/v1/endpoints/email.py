@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import os
+import logfire
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
@@ -138,15 +139,15 @@ async def authenticate_redirect(request: Request, state: str = Query(...), code:
     Handles the OAuth redirect from Google in a stateless and secure manner.
     It validates the state token, exchanges the code for credentials, and saves the refresh token.
     """
-    print("Callback received with state:", state)
+    logfire.info("Callback received with state:", state)
     try:
         # 1. Validate the incoming 'state' parameter. If valid, it returns the user's
         #    original JWT, securely identifying who this callback belongs to.
         user_jwt = validate_state_token(state)
-        print("User JWT from state token:", user_jwt)
+        logfire.debug("User JWT from state token:", user_jwt)
         # 2. Create a fresh flow object, identical to the one in the start endpoint.
         flow = create_google_oauth_flow()
-        print("Flow created with redirect URI:", flow.redirect_uri)
+        logfire.info("Flow created with redirect URI:", flow.redirect_uri)
         # 3. Exchange the authorization code for tokens. This is a blocking network
         #    request, so we run it in a separate thread to avoid freezing the server.
         await asyncio.to_thread(flow.fetch_token, code=code)
@@ -158,7 +159,7 @@ async def authenticate_redirect(request: Request, state: str = Query(...), code:
         # 4. Securely save the refresh token to your database, associated with the user.
         #    The `gmail_client` should handle the database logic. This call is now safe
         #    because `user_jwt` was securely retrieved from the validated state token.
-        print("Saving to supabase")
+        logfire.info("Saving to supabase")
         result = await asyncio.to_thread(gmail_client.save_refresh_token_to_supabase, jwt_token=user_jwt, refresh_token=credentials.refresh_token)
         if result != 200:
              raise HTTPException(status_code=500, detail="Failed to save authorization credentials.")
@@ -191,7 +192,7 @@ async def send_mail(mail_request: SendMailRequest, token: str = Depends(oauth2_s
         if os.getenv("DEBUG", "false").lower() == "true":
             # set the to a test adress
             mail_request.to = os.getenv("TEST_EMAIL_ADDRESS", "Not set :/")
-            print("DEBUG mode is on. Overriding recipient to:", mail_request.to)
+            logfire.debug("DEBUG mode is on. Overriding recipient to:", mail_request.to)
 
         message_id = gmail_client.send_mail(
             jwt_token=token,
@@ -243,7 +244,7 @@ async def send_mail(mail_request: SendMailRequest, token: str = Depends(oauth2_s
             raise HTTPException(status_code=500, detail="Failed to send email")
 
     except HTTPException as e:
-        print(e)
+        logfire.error(e)
         raise HTTPException(status_code=500, detail="Failed to send email")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Send mail error: {str(e)}")
@@ -262,13 +263,13 @@ async def get_newest_mails(
                 status_code=401,
                 detail="Gmail not authenticated. Please authenticate first."
             )
-        print("Fetching emails with max_results =", max_results)
+        logfire.info("Fetching emails with max_results =", max_results)
 
         emails = gmail_client.read_new_mails(
             jwt_token=token,
             max_results=max_results
         )
-        print("Got emails:", len(emails))
+        logfire.info("Got emails:", len(emails))
 
         return [EmailResponse(**email) for email in emails]
 

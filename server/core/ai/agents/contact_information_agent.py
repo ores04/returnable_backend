@@ -20,9 +20,6 @@ SMART_MODEL = CHEAP_MODEL
 load_dotenv()
 
 
-logfire.configure()
-logfire.instrument_pydantic_ai()
-
 search_usage_limit = UsageLimits(
     request_limit=50,
 )
@@ -183,7 +180,7 @@ def hello_world():
     )
 
     result = agent.run_sync('Where does "hello world" come from?')
-    print(result.output)
+    logfire.info(result.output)
 
 
 if __name__ == "__main__":
@@ -197,5 +194,5 @@ if __name__ == "__main__":
 
     result = asyncio.run(main())
 
-    print(result)  # This line was missing
-    print(extract_email_from_text(result))  # Extract email from the result
+    logfire.info(result)  # This line was missing
+    logfire.info(extract_email_from_text(result))  # Extract email from the result

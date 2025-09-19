@@ -1,5 +1,6 @@
 import base64
 import os
+import logfire
 
 from mistralai import Mistral, OCRResponse
 
@@ -19,7 +20,7 @@ class MistralAiClient:
 
     def perform_ocr_on_image(self, base64_image: bytes) -> OCRResponse:
         """Perform OCR on the given base64 encoded image using Mistral AI."""
-        print("Performing OCR on base64 encoded image")
+        logfire.info("Performing OCR on base64 encoded image")
         b64str = base64_image.decode('utf-8')
         ocr_response = self.client.ocr.process(
             model="mistral-ocr-latest",
@@ -33,7 +34,7 @@ class MistralAiClient:
 
     def perform_ocr_on_pdf(self, base64_pdf: bytes) -> OCRResponse:
         """Perform OCR on the given base64 encoded PDF using Mistral AI."""
-        print("Performing OCR on base64 encoded PDF")
+        logfire.info("Performing OCR on base64 encoded PDF")
         b64str = base64_pdf.decode('utf-8')
         ocr_response = self.client.ocr.process(
             model="mistral-ocr-latest",

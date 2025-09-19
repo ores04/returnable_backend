@@ -1,4 +1,5 @@
 import imapclient
+import logfire
 
 
 class GMXMailService:
@@ -47,6 +48,6 @@ if __name__ == "__main__":
     service = GMXMailService('********', '*******')
     emails = service.execute_with_imap_connection(service.fetch_mails)
     for msgid, data in emails:
-        print(f"Message ID: {msgid}")
-        print(f"Subject: {data[b'ENVELOPE'].subject.decode()}")
-        print(f"Body: {data[b'BODY[]'][:100]}...")
+        logfire.info(f"Message ID: {msgid}")
+        logfire.info(f"Subject: {data[b'ENVELOPE'].subject.decode()}")
+        logfire.info(f"Body: {data[b'BODY[]'][:100]}...")

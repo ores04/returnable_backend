@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logfire
 
 from server.core.agents.email_reply_service import EmailReplyService, process_mail_reply
 from server.core.email_service.gmail_client import GmailClient
@@ -15,7 +16,7 @@ async def refresh_mails_and_check_if_reply():
 
     returnable_requests = get_mail_ids_to_check(service_client)
     if returnable_requests is None or len(returnable_requests) == 0:
-        print("No returnable requests found.")
+        logfire.info("No returnable requests found.")
         return
 
     returnable_request_processing_tasks = []
@@ -25,7 +26,7 @@ async def refresh_mails_and_check_if_reply():
             """
             This wrapper can now properly handle async or sync code.
             """
-            print(f"Starting processing for request: {_returnable_request.get("id")}")
+            logfire.info(f"Starting processing for request: {_returnable_request.get('id')}")
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(
@@ -34,14 +35,14 @@ async def refresh_mails_and_check_if_reply():
                 _returnable_request,  # First argument to process_request
                 _service_client  # Second argument to process_request
             )
-            print(f"Finished processing for request: {_returnable_request.get("id")}")
+            logfire.info(f"Finished processing for request: {_returnable_request.get('id')}")
 
 
         returnable_request_processing_tasks.append(handle_request_wrapper(returnable_request, service_client))
 
     # wait for all tasks to complete
     await asyncio.gather(*returnable_request_processing_tasks)
-    print("All returnable requests processed.")
+    logfire.info("All returnable requests processed.")
 
 
 def process_request(returnable_request: dict, service_client: Client):
@@ -51,7 +52,7 @@ def process_request(returnable_request: dict, service_client: Client):
 
     latest_mail_for_request = get_latest_mail_with_returnable_id(service_client, return_request_id)
     if not bool(latest_mail_for_request.get("send_by_me")):
-        print("Skipping because company already replied or no mail was sent at all. We must now take an action")
+        logfire.info("Skipping because company already replied or no mail was sent at all. We must now take an action")
         return
 
     uuid = returnable_request.get("user_id")
@@ -68,31 +69,31 @@ def process_request(returnable_request: dict, service_client: Client):
             break
 
     if reply_mail is None:
-        print("No reply mail found for returnable request ID:", return_request_id)
+        logfire.warning("No reply mail found for returnable request ID:", return_request_id)
         return
 
     add_mail_to_db(None, service_client, reply_mail, return_request_id, send_by_me=False)
 
     confirm_reply = EmailReplyService.confirm_reply_mail(latest_mail_for_request.get("body"), reply_mail.get("body"))
     if not confirm_reply:
-        print("Reply mail not confirmed by AI for returnable request ID:", return_request_id)
+        logfire.warning("Reply mail not confirmed by AI for returnable request ID:", return_request_id)
         return
 
     # generate possible tasks
     processing_result = process_mail_reply(latest_mail_for_request.get("body"), reply_mail.get("body"))
-    print("Generated tasks:", processing_result.tasks)
+    logfire.info("Generated tasks:", processing_result.tasks)
 
     if processing_result.tasks is None:
         # todo propose reply
-        print("No tasks generated for returnable request ID:", return_request_id)
-        print("Proposing reply...")
+        logfire.warning("No tasks generated for returnable request ID:", return_request_id)
+        logfire.info("Proposing reply...")
         return
     else:
         # add tasks to db
         for task in processing_result.tasks:
-            print("Adding:", task)
+            logfire.info("Adding:", task)
             add_task_to_db(service_client, task, return_request_id)
-        print("All tasks added for returnable request ID:", return_request_id)
+        logfire.info("All tasks added for returnable request ID:", return_request_id)
         return
 
 def get_mail_ids_to_check(service_client: Client) -> list[dict]:
@@ -100,7 +101,7 @@ def get_mail_ids_to_check(service_client: Client) -> list[dict]:
         returnable_requests = get_all_active_returnable_requests(service_client)
         return returnable_requests
     except Exception as e:
-        print("Error getting returnable requests from database:", e)
+        logfire.error("Error getting returnable requests from database:", e)
         return []
 
 if __name__ == "__main__":

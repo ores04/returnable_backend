@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import logfire
 from io import BytesIO
 
 import requests
@@ -24,7 +25,7 @@ APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "not_set").encode("utf8")
 
 
 if VERIFY_TOKEN == "not_set":
-    print("Warning: WhatsApp verify token is not set. Please set the environment variable WHATSAPP_VERIFY_TOKEN.")
+    logfire.warning("Warning: WhatsApp verify token is not set. Please set the environment variable WHATSAPP_VERIFY_TOKEN.")
 
 @router.post("/add-document/{doc_title}")
 async def add_document(file: UploadFile, doc_title:str ,token: str = Depends(oauth2_scheme)):
@@ -34,7 +35,7 @@ async def add_document(file: UploadFile, doc_title:str ,token: str = Depends(oau
     try:
         contents = await file.read()
     except Exception as e:
-        print(f"Failed to read file: {str(e)}")
+        logfire.error(f"Failed to read file: {str(e)}")
         return {
             "status": "error",
             "message": f"Failed to read file at endpoint /add-document"
@@ -75,7 +76,7 @@ async def verifiy_post_header(raw_body, signature_header):
 
     if signature_header is None:
         # Reject requests without a signature
-        print("Request rejected: Missing X-Hub-Signature-256 header.")
+        logfire.warning("Request rejected: Missing X-Hub-Signature-256 header.")
         return False
 
     # The header is in the format "sha256=xxxxxxxx...", we need the hash part
@@ -85,21 +86,21 @@ async def verifiy_post_header(raw_body, signature_header):
 
     # 4. Compare the signatures using a constant-time comparison
     if not hmac.compare_digest(hmac_recieved, computed_hash):
-        print("Request rejected: Invalid signature.")
+        logfire.warning("Request rejected: Invalid signature.")
         return False
-    print("Verification OK")
+    logfire.info("Verification OK")
     return True
 
 
 def handle_request(data: dict):
     """This function is used to handle the incoming request. It will be called in the background task."""
     #print("Received webhook:", json.dumps(data, indent=2))
-    print("Processing incoming WhatsApp webhook...")
+    logfire.info("Processing incoming WhatsApp webhook...")
     # Check if it's a valid WhatsApp notification
     if 'object' in data and 'entry' in data and data['object'] == 'whatsapp_business_account':
         try:
             for entry in data['entry']:
-                print("Start processing entry:", entry["id"])
+                logfire.info("Start processing entry:", entry["id"])
                 for change in entry['changes']:
                     if 'messages' in change['value']:
                         message = change['value']['messages'][0]
@@ -120,11 +121,11 @@ def handle_request(data: dict):
 
 
                         # Add handlers for other types like 'audio', 'video', 'sticker' if needed
-                print("Finished processing entry:", entry["id"])
+                logfire.info("Finished processing entry:", entry["id"])
 
 
         except (KeyError, IndexError) as e:
-            print(f"Could not parse webhook payload: {e}")
+            logfire.error(f"Could not parse webhook payload: {e}")
             pass  # Not a message notification
 
 def send_message(to, message, phone_number_id):
@@ -140,9 +141,9 @@ def send_message(to, message, phone_number_id):
     }
     response = requests.post(url, json=payload, headers=headers)
     if response.status_code != 200:
-        print(f"Failed to send message to {to}. Response: {response.status_code} {response.text}")
+        logfire.error(f"Failed to send message to {to}. Response: {response.status_code} {response.text}")
     else:
-        print(f"Message sent to {to}.")
+        logfire.info(f"Message sent to {to}.")
 
 
 

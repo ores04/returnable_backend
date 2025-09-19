@@ -1,6 +1,7 @@
 import os
 import base64
 import json
+import logfire
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google.auth.transport.requests import Request
@@ -57,17 +58,17 @@ class GmailClient:
                 scopes=SCOPES,
 
             )
-            print("Erstellte Credentials aus gespeichertem Refresh Token")
+            logfire.info("Erstellte Credentials aus gespeichertem Refresh Token")
 
         try:
-            print("Attempting to refresh the access token...")
+            logfire.info("Attempting to refresh the access token...")
             creds.refresh(Request())
-            print("Access token refreshed successfully.")
+            logfire.info("Access token refreshed successfully.")
             self.service = build('gmail', 'v1', credentials=creds)
-            print("Google API service created successfully.")
+            logfire.info("Google API service created successfully.")
             return None
         except Exception as e:
-            print(f"Error: The refresh token may be invalid or revoked. {e}")
+            logfire.error(f"Error: The refresh token may be invalid or revoked. {e}")
             # This is where you would typically trigger a re-authentication flow
             # for the user.
             return False
@@ -81,7 +82,7 @@ class GmailClient:
             supabase = get_supabase_client(jwt_token)
 
             uid = supabase.auth.get_user(jwt_token).user.id
-            print(f"Speichere Refresh Token für User ID: {uid}")
+            logfire.info(f"Speichere Refresh Token für User ID: {uid}")
 
             # update the refresh token or insert if not exists
             result = supabase.from_(TOKEN_TABLE_NAME).upsert({
@@ -93,11 +94,11 @@ class GmailClient:
             result.raise_when_api_error(result)
 
 
-            print("Refresh Token erfolgreich gespeichert")
+            logfire.info("Refresh Token erfolgreich gespeichert")
             return 200
 
         except Exception as e:
-            print(f"Fehler beim Speichern des Refresh Tokens: {e}")
+            logfire.error(f"Fehler beim Speichern des Refresh Tokens: {e}")
             return 503
 
     def get_refresh_token_from_supabase(self, jwt_token: str | None, service_client: Client | None, uuid: str | None) -> str:
@@ -115,10 +116,10 @@ class GmailClient:
 
             if result.data and len(result.data) > 0:
                 encrypted_token = result.data[0]['token']
-                print("Refresh Token erfolgreich geladen für User ID:", uid)
+                logfire.info("Refresh Token erfolgreich geladen für User ID:", uid)
                 return self._decrypt_token(encrypted_token)
         except Exception as e:
-            print(f"Fehler beim Laden des Refresh Tokens: {e}")
+            logfire.error(f"Fehler beim Laden des Refresh Tokens: {e}")
         return None
 
     def read_new_mails(self, jwt_token: str | None, service_client: Client | None, uuid: str | None, max_results: int = 10) -> list[dict]:
@@ -164,7 +165,7 @@ class GmailClient:
             return emails
 
         except Exception as e:
-            print(f"Fehler beim Lesen der E-Mails: {e}")
+            logfire.error(f"Fehler beim Lesen der E-Mails: {e}")
             return []
 
 
@@ -237,5 +238,5 @@ class GmailClient:
             return send_message['id']
 
         except Exception as e:
-            print(f"Fehler beim Senden der E-Mail: {e}")
+            logfire.error(f"Fehler beim Senden der E-Mail: {e}")
             return None

@@ -1,5 +1,6 @@
 import json
 from typing import Any
+import logfire
 
 from pydantic import BaseModel
 
@@ -60,4 +61,4 @@ if __name__ == "__main__":
         from_company="Beispiel GmbH",
         reclamation_reason="Defekter Artikel"
     )
-    print(email_content)
+    logfire.info(email_content)

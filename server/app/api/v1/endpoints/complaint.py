@@ -2,6 +2,7 @@
 endpoints that are used in the complaint process
 """
 import time
+import logfire
 from fastapi import APIRouter, UploadFile, Request
 from typing import Dict, Any
 import numpy as np
@@ -35,7 +36,7 @@ class ProposeActionProps(BaseModel):
 async def process_pdf(file: UploadFile) -> Dict[str, Any]:
     """Accepts a PDF file and processes it to extract information."""
 
-    print(f"Processing PDF file: {file.filename}")
+    logfire.info(f"Processing PDF file: {file.filename}")
 
     contents = await file.read()
 
@@ -147,8 +148,8 @@ async def process_mail(data: ProposeActionProps) -> Dict[str, Any]:
         from_company=data.from_company,
         reclamation_reason=data.complaint_reason
     )
-    print(email)
-    print(subject)
+    logfire.info(email)
+    logfire.info(subject)
     return {
         "status": "success",
         "message": "Complaint action proposed successfully",
