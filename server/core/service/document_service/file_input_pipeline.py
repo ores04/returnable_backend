@@ -4,7 +4,7 @@ from supabase import Client
 
 from server.core.ai.ai_clients.openai_client import OpenAIClient
 from server.core.service.document_service.chunking import chunk_text
-from server.core.service.supabase_connectors.supabase_client import add_document_to_db, add_keywords_to_db
+from server.core.service.supabase_connectors.supabase_documents_client import add_keywords_to_db, add_document_to_db
 
 
 class DocumentKeyword(BaseModel):

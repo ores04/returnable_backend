@@ -8,6 +8,7 @@ from supabase_auth import SignInWithEmailAndPasswordCredentials, AuthResponse
 load_dotenv()
 
 USER_META_INFORMATION_TABLE_NAME = "USER_META_INFORMATION"
+TOKEN_TABLE_NAME = "REFRESH_TOKEN"
 
 url: str = os.environ.get("SUPABASE_URL", None)
 key: str = os.environ.get("SUPABASE_KEY", None)

@@ -3,7 +3,7 @@ from supabase import Client
 from server.core.service.supabase_connectors.supabase_client import get_supabase_client
 
 RAG_DOCUMENTS_TABLE_NAME = "RAG_DOCUMENTS"
-RAG_DOCUMENT_SEGMENTS_TABLE_NAME = "RAG_DOCUMENT_SEGMENTS"
+RAG_DOCUMENT_SEGMENTS_TABLE_NAME = "RAG_DOCUMENTS_SECTIONS"
 RAG_DOCUMENTS_METADATA_TABLE_NAME = "RAG_DOCUMENT_META_DATA_VALUE"
 
 

@@ -12,8 +12,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from server.core.service.email_service.gmail_client import GmailClient
-from server.core.service.supabase_connectors.supabase_client import add_returnable_request_to_db, add_action_to_db, \
-    add_mail_to_db
+from server.core.service.supabase_connectors.supabase_actions_client import add_action_to_db
+from server.core.service.supabase_connectors.supabase_mails_client import add_mail_to_db
+from server.core.service.supabase_connectors.supabase_requests_client import add_returnable_request_to_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
