@@ -66,13 +66,14 @@ class OpenAIClient:
         )
         return response.content
 
-    def get_embedding(self, text: str, model: str = "text-embedding-3-large") -> list[float]:
+    def get_embedding(self, text: str, model: str = "text-embedding-3-large", dim:int=384) -> list[float]:
         """
         Generates an embedding for the given text using the specified model.
 
         Args:
             text (str): The text to be embedded.
             model (str): The embedding model to use.
+            dim (int): The embedding dimension, by default we use 384 the supabase default
 
         Returns:
             list[float]: The embedding vector.
@@ -80,6 +81,7 @@ class OpenAIClient:
         response = self.client.embeddings.create(
             model=model,
             input=text,
+            dimensions=dim
         )
         return response.data[0].embedding
 

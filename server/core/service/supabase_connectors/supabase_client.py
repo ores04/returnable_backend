@@ -16,8 +16,9 @@ ACTION_TABLE_NAME = "ACTION_STEPS"
 RETURN_TASKS_TABLE_NAME = "RETURN_TASKS"
 RETURN_MAILS_TABLE_NAME = "RETURN_MAILS"
 RAG_DOCUMENTS_TABLE_NAME = "RAG_DOCUMENTS"
-RAG_DOCUMENT_SEGMENTS_TABLE_NAME = "RAG_DOCUMENT_SEGMENTS"
+RAG_DOCUMENT_SEGMENTS_TABLE_NAME = "RAG_DOCUMENTS_SECTIONS"
 RAG_DOCUMENTS_METADATA_TABLE_NAME = "RAG_DOCUMENT_META_DATA_VALUE"
+USER_META_INFORMATION_TABLE_NAME = "USER_META_INFORMATION"
 
 url: str = os.environ.get("SUPABASE_URL", None)
 key: str = os.environ.get("SUPABASE_KEY", None)
@@ -230,7 +231,7 @@ def get_uuid_from_phone_number(phone_number: str) -> str:
     """This function gets the uuid from a user based on a phone numner. The phonenumber is expected to be +()..."""
     service_level_client = get_supabase_service_role_client()
 
-    uuid = service_level_client.from_("profiles").select("id").eq("phone_number", phone_number).execute()
+    uuid = service_level_client.from_(USER_META_INFORMATION_TABLE_NAME).select("uuid").eq("phone_number", phone_number).execute().data[0]["uuid"]
     return uuid
 
 

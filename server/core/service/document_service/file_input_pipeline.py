@@ -15,7 +15,7 @@ class DocumentKeywords(BaseModel):
 
 
 
-def process_text_input(text: str, title: str, jwt_token: str|None, supabase_client:Client = None) -> str:
+def process_text_input(text: str, title: str, jwt_token: str|None, supabase_client:Client = None, uuid:str=None) -> str:
     """
     Processes the input text and returns True if successful.
 
@@ -43,7 +43,7 @@ def process_text_input(text: str, title: str, jwt_token: str|None, supabase_clie
     document_dict = {"name": title,
                      "document_segments": [{"embedding": emb} for emb in embeddings]}
 
-    doc_id = add_document_to_db(jwt_token=jwt_token, document_data=document_dict, supabase_client=supabase_client)
+    doc_id = add_document_to_db(jwt_token=jwt_token, document_data=document_dict, supabase_client=supabase_client, uuid=uuid)
 
     # add keywords to db
     for kw in keywords:

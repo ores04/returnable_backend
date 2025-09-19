@@ -1,3 +1,4 @@
+import base64
 import os
 from datetime import time
 from io import BytesIO
@@ -11,6 +12,7 @@ from server.core.ai.agents.invoice_image_processing_using_llm import LLMImagePro
 from server.core.ai.ai_clients.mistal_ai_client import MistralAiClient
 from server.core.service.document_service.file_input_pipeline import process_text_input
 from server.core.service.supabase_connectors.bucket_client import SupabaseBucketClientFactory
+from server.core.service.supabase_connectors.supabase_client import get_supabase_service_role_client
 
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "not_set")
 ACCESS_TOKEN = os.getenv("WHATSAPP_ACSESS_TOKEN", "not_set")
@@ -50,7 +52,7 @@ def handle_media_message(media_id, mime_type, phone_number, filename=None,):
             logfire.info(f"Successfully downloaded and saved: {save_path}")
 
         # save file to supabase
-        current_date = time().strftime(format="%Y/%m/%d")
+        current_date = time().strftime(format="%Y_%m_%d")
         filename = f"{current_date}_{filename}"
         subabase_bucket_client = SupabaseBucketClientFactory.create_from_service_level_client(phone_number)
         subabase_bucket_client.add_document_to_bucket(media_response.content, filename, "user_files") # TODO check
@@ -60,18 +62,21 @@ def handle_media_message(media_id, mime_type, phone_number, filename=None,):
             # TODO
             raise NotImplementedError
         elif mime_type.startswith("image/"):
-            process_document(media_response.content, filename, None)
+            b64_encoded_image = base64.b64encode(media_response.content)
+            process_document(b64_encoded_image, filename, None, uuid=subabase_bucket_client.uuid)
 
     except requests.exceptions.RequestException as e:
         logfire.error(f"Error handling media message: {e}")
 
-async def process_document(contents, doc_title, token):
-    image = Image.open(BytesIO(contents))
-    # read the content using mistal ocr
+def process_document(contents, doc_title, token, uuid):
     mistal_client = MistralAiClient()
     llm_image_processor = LLMImageProcessor(mistal_client)
     text = llm_image_processor.process_image(image_base64=contents, is_pdf=False)
-    doc_id = process_text_input(text=text, title=doc_title, jwt_token=token)
+    if uuid is not None:
+        client = get_supabase_service_role_client()
+    else:
+        client = None
+    doc_id = process_text_input(text=text, title=doc_title, jwt_token=token, supabase_client=client, uuid=uuid)
     if doc_id is None:
         raise HTTPException(status_code=400, detail="Document not added")
     return doc_id

@@ -3,16 +3,11 @@ import hmac
 import json
 import os
 import logfire
-from io import BytesIO
 
 import requests
-from PIL import Image
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, Query, Request, BackgroundTasks, Header
 from fastapi.security import OAuth2PasswordBearer
 
-from server.core.ai.agents.invoice_image_processing_using_llm import LLMImageProcessor
-from server.core.ai.ai_clients.mistal_ai_client import MistralAiClient
-from server.core.service.document_service.file_input_pipeline import process_text_input
 from server.core.service.document_service.whatsapp_webhook_service import handle_media_message, process_document
 
 router = APIRouter()
@@ -100,13 +95,14 @@ def handle_request(data: dict):
     if 'object' in data and 'entry' in data and data['object'] == 'whatsapp_business_account':
         try:
             for entry in data['entry']:
-                logfire.info("Start processing entry:", entry["id"])
+                logfire.info("Start processing entry:" + entry["id"])
+
                 for change in entry['changes']:
                     if 'messages' in change['value']:
                         message = change['value']['messages'][0]
                         message_type = message['type']
-                        phone_number = change['contacts']['wa_id']
-
+                        phone_number = change['value']['contacts'][0]['wa_id'] # we can assume that there is always one contact
+                        print(phone_number)
                         if message_type == "image":
                             media_id = message['image']['id']
                             mime_type = message['image']['mime_type']
@@ -121,7 +117,7 @@ def handle_request(data: dict):
 
 
                         # Add handlers for other types like 'audio', 'video', 'sticker' if needed
-                logfire.info("Finished processing entry:", entry["id"])
+                logfire.info("Finished processing entry:" + entry["id"])
 
 
         except (KeyError, IndexError) as e:
