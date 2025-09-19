@@ -1,8 +1,11 @@
 from storage3.types import UploadResponse
 from supabase import Client
 
-from server.core.service.supabase_connectors.supabase_client import get_supabase_client, \
-    get_supabase_service_role_client, get_uuid_from_phone_number
+from server.core.service.supabase_connectors.supabase_client import (
+    get_supabase_client,
+    get_supabase_service_role_client,
+    get_uuid_from_phone_number,
+)
 
 
 class SupabaseBucketClient:
