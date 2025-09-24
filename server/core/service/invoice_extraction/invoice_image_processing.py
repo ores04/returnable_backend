@@ -109,7 +109,7 @@ class InvoiceImageProcessing:
     def group_text_by_indent_refactored(self, ocr_data, indent_tolerance=10):
         """
         Groups text from Tesseract OCR data into a hierarchical JSON structure
-        based on line indentation with a configurable tolerance.
+        based online indentation with a configurable tolerance.
 
         Args:
             ocr_data (dict): The dictionary output from pytesseract.image_to_data.
@@ -235,23 +235,4 @@ class InvoiceImageProcessing:
 
 
 if __name__ == "__main__":
-    # download test data
-    import numpy as np
-    from datasets import load_dataset
-
-    dataset = load_dataset("Aoschu/German_invoices_dataset")
-
-    first_image = dataset['train'][60]['image']
-
-    # The image is a PIL Image object, so you can display it
-    first_image.show()
-
-    # Convert PIL Image to cv2 format
-    # PIL uses RGB, cv2 uses BGR, so we need to convert
-    pil_image = first_image.convert('RGB')  # Ensure RGB format
-    cv2_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-
-    # Now you can use the cv2_image with your InvoiceImageProcessing class
-    processor = InvoiceImageProcessing(cv2_image)
-    extracted_text = processor.extract_information()
-    logfire.info("Extracted text:", extracted_text)
+    pass

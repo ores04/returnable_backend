@@ -270,7 +270,7 @@ async def get_newest_mails(
             jwt_token=token,
             max_results=max_results
         )
-        logfire.info("Got emails:", len(emails))
+        logfire.info("Got emails:" + str(len(emails)))
 
         return [EmailResponse(**email) for email in emails]
 

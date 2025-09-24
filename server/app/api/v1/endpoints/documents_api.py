@@ -3,7 +3,6 @@ import hmac
 import os
 import logfire
 
-import requests
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, Query, Request, BackgroundTasks, Header
 from fastapi.security import OAuth2PasswordBearer
 
@@ -95,24 +94,25 @@ def handle_request(data: dict):
         try:
             for entry in data['entry']:
                 logfire.info("Start processing entry:" + entry["id"])
-
                 for change in entry['changes']:
                     if 'messages' in change['value']:
+
                         message = change['value']['messages'][0]
+                        message_from = message['from']  # extract the phone number of the sender
+                        phone_number_id = change['value']['metadata']['phone_number_id']
                         message_type = message['type']
                         phone_number = change['value']['contacts'][0]['wa_id'] # we can assume that there is always one contact
-                        print(phone_number)
                         if message_type == "image":
                             media_id = message['image']['id']
                             mime_type = message['image']['mime_type']
-                            handle_media_message(media_id, mime_type, phone_number,None)
+                            handle_media_message(media_id, mime_type, phone_number,None, to=message_from, phone_number_id=phone_number_id)
 
                         elif message_type == "document":
                             media_id = message['document']['id']
                             mime_type = message['document']['mime_type']
                             filename = message['document'].get('filename',
                                                                'downloaded_file')  # Use provided filename or a default
-                            handle_media_message(media_id, mime_type,phone_number, filename)
+                            handle_media_message(media_id, mime_type,phone_number, filename, to=message_from, phone_number_id=phone_number_id)
 
 
                         # Add handlers for other types like 'audio', 'video', 'sticker' if needed
@@ -123,22 +123,7 @@ def handle_request(data: dict):
             logfire.error(f"Could not parse webhook payload: {e}")
             pass  # Not a message notification
 
-def send_message(to, message, phone_number_id):
-    url = f"https://graph.facebook.com/v22.0/{phone_number_id}/messages"
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "text": {"body": message}
-    }
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code != 200:
-        logfire.error(f"Failed to send message to {to}. Response: {response.status_code} {response.text}")
-    else:
-        logfire.info(f"Message sent to {to}.")
+
 
 
 

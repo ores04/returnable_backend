@@ -15,15 +15,16 @@ from server.core.service.supabase_connectors.bucket_client import SupabaseBucket
 from server.core.service.supabase_connectors.supabase_client import get_supabase_service_role_client
 
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "not_set")
-ACCESS_TOKEN = os.getenv("WHATSAPP_ACSESS_TOKEN", "not_set")
+ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "not_set")
 API_VERSION = "v22.0"  # Update as needed
 DEBUG = os.getenv("DEBUG", "false")
+SHOULD_SAVE_LOCALLY = False
 
 if VERIFY_TOKEN == "not_set" or ACCESS_TOKEN == "not_set":
     logfire.warning("Warning: WhatsApp tokens are not set. Please set the environment variables WHATSAPP_VERIFY_TOKEN and WHATSAPP_ACSESS_TOKEN.")
 
 
-def handle_media_message(media_id, mime_type, phone_number, filename=None,):
+def handle_media_message(media_id, mime_type, phone_number, filename=None, to=None, phone_number_id=None):
     """
     Downloads media from WhatsApp and calls a processing function.
     """
@@ -47,7 +48,7 @@ def handle_media_message(media_id, mime_type, phone_number, filename=None,):
             extension = mime_type.split('/')[1]
             filename = f"{media_id}.{extension}"
 
-        if DEBUG:
+        if DEBUG and SHOULD_SAVE_LOCALLY:
             save_path = write_file_to_disk(filename, media_response)
             logfire.info(f"Successfully downloaded and saved: {save_path}")
 
@@ -57,13 +58,21 @@ def handle_media_message(media_id, mime_type, phone_number, filename=None,):
         subabase_bucket_client = SupabaseBucketClientFactory.create_from_service_level_client(phone_number)
         subabase_bucket_client.add_document_to_bucket(media_response.content, filename, "user_files") # TODO check
 
-        # --- YOUR PROCESSING LOGIC GOES HERE ---
         if mime_type == "application/pdf":
-            # TODO
-            raise NotImplementedError
+            b64_encoded_pdf = base64.b64encode(media_response.content)
+            process_document(b64_encoded_pdf, filename, None, uuid=subabase_bucket_client.uuid)
         elif mime_type.startswith("image/"):
             b64_encoded_image = base64.b64encode(media_response.content)
             process_document(b64_encoded_image, filename, None, uuid=subabase_bucket_client.uuid)
+
+        else:
+            logfire.warning(f"Unsupported media type: {mime_type}")
+            return
+
+        if to is not None and phone_number_id is not None:
+            message = f"Your document {filename} has been successfully processed and added to your account."
+            send_message(to, message, phone_number_id)
+
 
     except requests.exceptions.RequestException as e:
         logfire.error(f"Error handling media message: {e}")
@@ -98,23 +107,26 @@ def write_file_to_disk(filename, media_response):
             f.write(media_response.content)
     return save_path
 
+def send_message(to, message, phone_number_id):
+    """Send a WhatsApp message using the WhatsApp Business API.
 
-# --- PROCESSING FUNCTIONS (YOUR CUSTOM LOGIC) ---
-def process_pdf(file_path):
-    logfire.info(f"Processing PDF: {file_path}")
-    # Example: Use a library like PyMuPDF (fitz) or pdfplumber to extract text
-    # import fitz
-    # with fitz.open(file_path) as doc:
-    #     text = ""
-    #     for page in doc:
-    #         text += page.get_text()
-    #     print("Extracted PDF Text:", text[:200]) # Print first 200 chars
+        to: the whatsapp id to send the message to
+        message: The message text to send.
+        phone_number_id: The ID of the WhatsApp Business phone number to send the message from
 
-
-def process_image(file_path):
-    logfire.info(f"Processing Image: {file_path}")
-    # Example: Use a library like Pillow for image manipulation or
-    # send it to a cloud AI service like Google Vision or AWS Rekognition for analysis.
-    # from PIL import Image
-    # with Image.open(file_path) as img:
-    #     print(f"Image format: {img.format}, size: {img.size}")
+    """
+    url = f"https://graph.facebook.com/v22.0/{phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "text": {"body": message}
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code != 200:
+        logfire.error(f"Failed to send message to {to}. Response: {response.status_code} {response.text}")
+    else:
+        logfire.info(f"Message sent to {to}.")
