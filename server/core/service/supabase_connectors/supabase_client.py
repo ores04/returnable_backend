@@ -1,3 +1,4 @@
+import logfire
 from dotenv import load_dotenv
 import os
 
@@ -44,7 +45,31 @@ def get_auth_client_from_username_password(username: str, password: str) -> Auth
 
 def get_uuid_from_phone_number(phone_number: str) -> str:
     """This function gets the uuid from a user based on a phone numner. The phonenumber is expected to be +()..."""
+    # clean the phone number
+    phone_number = phone_number.replace(" ", "").replace("-", "").replace("+", "")
     service_level_client = get_supabase_service_role_client()
+    logfire.info(f"Getting uuid for phone number {phone_number}")
+    data = service_level_client.from_(USER_META_INFORMATION_TABLE_NAME).select("uuid").eq("phone_number", phone_number).execute().data
+    if not data or len(data) == 0:
+        raise ValueError(f"No user found for phone number {phone_number}")
 
-    uuid = service_level_client.from_(USER_META_INFORMATION_TABLE_NAME).select("uuid").eq("phone_number", phone_number).execute().data[0]["uuid"]
+    uuid = data[0]["uuid"]
     return uuid
+
+def is_premium_user_from_uuid(uuid: str) -> bool:
+    """This function checks if a user is a premium user based on their uuid."""
+    return True ## temporary bypass
+    service_level_client = get_supabase_service_role_client()
+    logfire.debug(f"Checking if user {uuid} is a premium user")
+    data = service_level_client.from_(USER_META_INFORMATION_TABLE_NAME).select("user_status").eq("uuid", uuid).execute().data
+    if not data or len(data) == 0:
+        raise ValueError(f"No user found for uuid {uuid}")
+    is_premium = data[0]["user_status"] == "premium"
+    return is_premium
+
+def get_phone_number_from_uuid(uuid: str) -> str:
+    """This function gets the phone number from a user based on a uuid."""
+    service_level_client = get_supabase_service_role_client()
+    logfire.debug(f"Getting phone number for uuid {uuid}")
+    phone_number = service_level_client.from_(USER_META_INFORMATION_TABLE_NAME).select("phone_number").eq("uuid", uuid).execute().data[0]["phone_number"]
+    return phone_number

@@ -5,6 +5,7 @@ from server.core.service.supabase_connectors.supabase_client import get_supabase
 RAG_DOCUMENTS_TABLE_NAME = "RAG_DOCUMENTS"
 RAG_DOCUMENT_SEGMENTS_TABLE_NAME = "RAG_DOCUMENTS_SECTIONS"
 RAG_DOCUMENTS_METADATA_TABLE_NAME = "RAG_DOCUMENT_META_DATA_VALUE"
+RAG_DOCUMENTS_SEARCH_KEYWORDS_TABLE_NAME = "RAG_DOCUMENT_KEYWORD"
 
 
 def add_document_to_db(jwt_token: str | None, document_data: dict, supabase_client: Client = None, uuid: str = None) -> str:
@@ -65,6 +66,23 @@ def add_keywords_to_db(jwt_token: str, document_data: dict, supabase_client: Cli
         supabase_client = get_supabase_client(jwt_token=jwt_token)
 
     response = supabase_client.table(RAG_DOCUMENTS_METADATA_TABLE_NAME).insert(document_data).execute()
+    response.raise_when_api_error(response)
+
+    return response.data
+
+def add_search_keywords_to_db(jwt_token: str, document_data: dict, supabase_client: Client = None):
+    """ Add the keywords document to the database."""
+    # assert that the doc has the following fields: embedding (list of float), name (str)
+    assert jwt_token or supabase_client, "Either jwt_token or service_client must be set"
+    required_fields = ["embedding", "name", "document_id"]
+    for field in required_fields:
+        if field not in document_data:
+            raise ValueError(f"Missing required field: {field}")
+
+    if jwt_token:
+        supabase_client = get_supabase_client(jwt_token=jwt_token)
+
+    response = supabase_client.table(RAG_DOCUMENTS_SEARCH_KEYWORDS_TABLE_NAME).insert(document_data).execute()
     response.raise_when_api_error(response)
 
     return response.data

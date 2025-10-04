@@ -6,7 +6,6 @@ import logfire
 from fastapi import APIRouter, UploadFile, Request
 from typing import Dict, Any
 import numpy as np
-import cv2
 from PIL import Image
 from io import BytesIO
 
@@ -45,7 +44,6 @@ async def process_pdf(file: UploadFile) -> Dict[str, Any]:
         image = Image.open(BytesIO(contents))
         if image.mode != 'RGB':
             image = image.convert('RGB')
-        cv2_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
     except Exception as e:
         return {
@@ -54,7 +52,7 @@ async def process_pdf(file: UploadFile) -> Dict[str, Any]:
         }
 
     # use the image processing class to extract information
-    processor = InvoiceImageProcessing(cv2_image)
+    processor = InvoiceImageProcessing(None, _image_pil=image)
     extracted_info = processor.extract_information()
 
     return {
@@ -75,7 +73,6 @@ async def process_file(request: Request, is_pdf: bool = False) -> Dict[str, Any]
         image = Image.open(BytesIO(contents))
         if image.mode != 'RGB':
             image = image.convert('RGB')
-        cv2_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
     except Exception as e:
         return {
@@ -84,7 +81,7 @@ async def process_file(request: Request, is_pdf: bool = False) -> Dict[str, Any]
         }
 
     # use the image processing class to extract information
-    processor = InvoiceImageProcessing(cv2_image, _image_pil=image)
+    processor = InvoiceImageProcessing(None, _image_pil=image)
     extracted_info = processor.extract_information(is_pdf)
 
     return {

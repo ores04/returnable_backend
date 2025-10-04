@@ -3,8 +3,6 @@ import json
 import logfire
 from io import BytesIO
 
-import cv2
-import pytesseract
 from PIL import Image
 
 
@@ -81,30 +79,6 @@ class InvoiceImageProcessing:
     def __init__(self, image, _image_pil:Image =None):
         self.image = image
         self.pil_image: Image = _image_pil
-        self.ocr_engine = pytesseract.pytesseract
-
-    def preprocess_image(self):
-        """
-        Preprocess the invoice image for better OCR results.
-        This includes converting to grayscale, thresholding, and resizing.
-        """
-        gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-
-        _, thresh_image = cv2.threshold(
-            gray_image, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        return thresh_image
-
-    def process_image(self):
-        """
-        Process the invoice image to extract text using OCR.
-        Returns the extracted text.
-        """
-        preprocessed_image = self.preprocess_image()
-        # option to use german language and treat as multiple blocks of text
-        custom_config = r'--oem 3 --psm 6 -l deu'
-        self.extracted_text = self.ocr_engine.image_to_data(
-            preprocessed_image, output_type=pytesseract.Output.DICT, config=custom_config)
-        return self.extracted_text
 
     def group_text_by_indent_refactored(self, ocr_data, indent_tolerance=10):
         """

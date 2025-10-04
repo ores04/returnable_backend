@@ -13,12 +13,7 @@ from pydantic_ai.usage import UsageLimits
 from server.core.ai.agents.agent_prompts import MASTER_REPLY_AGENT_PROMPT, CHECK_AGENT_PROMPT
 from server.core.ai.ai_clients.openai_client import OpenAIClient
 
-SMART_MODEL = "openai:gpt-5"
-CHEAP_MODEL = "openai:gpt-5-mini"
-CHEAPEST_MODEL = "openai:gpt-5-nano"
-# for testing purposes, we can use a cheaper model
-
-SMART_MODEL = CHEAP_MODEL
+from server.core.ai.agents.agent_consts import SMART_MODEL, CHEAP_MODEL
 
 load_dotenv()
 

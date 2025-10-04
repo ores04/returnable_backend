@@ -11,11 +11,7 @@ from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
-SMART_MODEL = "openai:gpt-5"
-CHEAP_MODEL = "openai:gpt-4o-mini"
-# for testing purposes, we can use a cheaper model
-
-SMART_MODEL = CHEAP_MODEL
+from server.core.ai.agents.agent_consts import SMART_MODEL, CHEAP_MODEL
 
 load_dotenv()
 
@@ -46,7 +42,7 @@ class SearchDeps:
 
 
 master_search_agent = Agent(
-    SMART_MODEL,
+    CHEAP_MODEL,
     system_prompt="You are an expert search agent. You task is to find the customer support email address for the company that will be mentioned in the user query. To start the search use the search tool.",
     instrument=True,
     deps_type=SearchDeps,
@@ -54,7 +50,7 @@ master_search_agent = Agent(
 )
 
 site_agent = Agent(
-    SMART_MODEL,
+    CHEAP_MODEL,
     system_prompt="You are an agent tasked with finding relevant information regarding the customer support email address for the company that will be mentioned in the user query. This information can be in the form of the mail address or a link to a page, where the email address is likely to be found."
     "If you found the email address that is the support email, return it directly as a string, return ONLY the email address. Only call tools if you have not found the address yet. If you found a link to a page, where the email address is likely to be found a SearchResult object with the link and a snippet of what the page is about. "
     "If you found no information, return an EmptyPage object. You should search with German keywords, as the user will likely use German keywords.",

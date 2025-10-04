@@ -1,15 +1,18 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from supabase_auth import AuthResponse
+import datetime
 
 from server.core.service.supabase_connectors.supabase_client import get_supabase_client, \
     get_auth_client_from_username_password
+from server.core.service.whatsapp_service.whatsapp_reminder_service import remind_users
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 router = APIRouter()
 
+last_reminder_pulse = None
 
 class JWTRequestBody(BaseModel):
     username: str
@@ -40,6 +43,22 @@ def get_jwt_token_from_supabase(request: JWTRequestBody):
     return {
         "status": "success",
         "jwt_token": token
+    }
+
+@router.get("/reminder/pulse")
+def pluse_reminder(background_tasks: BackgroundTasks):
+    """This is an endpoint that will be periodically called to check if a new reminder needs to be sent."""
+    global last_reminder_pulse
+    current_time = datetime.datetime.now()
+    # todo add logic to avaoid getting ddosed
+    if last_reminder_pulse is None:
+        last_reminder_pulse = current_time - datetime.timedelta(minutes=1)  # Assume the last pulse was 15 minutes ago
+    background_tasks.add_task(remind_users, last_reminder_pulse, current_time)
+    last_reminder_pulse = current_time
+
+    return {
+        "status": "success",
+        "message": "Remember to take your pluse!"
     }
 
 @router.get("/test_supabase_connection")

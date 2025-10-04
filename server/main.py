@@ -1,6 +1,8 @@
 """
 Main FastAPI application entry point.
 """
+import os
+
 import logfire
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,12 +15,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+LOGFIRE_TOKEN = os.getenv("LOGFIRE_TOKEN")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    logfire.configure()
+    logfire.configure(
+        token=LOGFIRE_TOKEN,
+    )
     logfire.instrument_pydantic_ai()
     logfire.info("Starting up FastAPI application...")
     yield

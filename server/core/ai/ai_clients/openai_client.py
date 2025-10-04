@@ -85,3 +85,17 @@ class OpenAIClient:
         )
         return response.data[0].embedding
 
+    def get_text_from_audio(self, audio_data: bytes, model: str = "whisper-1") -> Optional[str]:
+        """Transcribes audio data using OpenAI Whisper."""
+        try:
+            # Note: The 'file' parameter expects a tuple: (filename, file_data, mimetype)
+            # We can name the file 'audio.ogg' as WhatsApp sends ogg/opus format.
+            files = {'file': ('audio.ogg', audio_data, 'audio/ogg')}
+            response = self.client.audio.transcriptions.create(
+                model="whisper-1",
+                file=files['file']
+            )
+            return response.text
+        except Exception as e:
+            print(f"Error during transcription: {e}")
+            return None
