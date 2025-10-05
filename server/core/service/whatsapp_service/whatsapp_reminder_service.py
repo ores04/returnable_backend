@@ -7,7 +7,8 @@ import asyncio
 
 from dotenv import load_dotenv
 
-from server.core.ai.agents.exract_reminder_agent import ReminderModel, master_extract_reminder_agent
+from server.core.ai.agents.exract_reminder_agent import ReminderModel, master_extract_reminder_agent, ReminderDeps, \
+    reminder_usage_limit
 from server.core.service.supabase_connectors.supabase_client import get_uuid_from_phone_number, \
     get_supabase_service_role_client, get_phone_number_from_uuid
 from server.core.service.supabase_connectors.supabase_reminder_client import add_reminder_with_service_client, \
@@ -23,7 +24,10 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
     if uuid is None:
         raise ValueError("User not found")
     send_message(phone_number, "Erstlle deine Erinnerung...", WHATSAPP_PHONE_ID)
-    reminderModel = asyncio.run(extract_reminders_from_text(text))
+
+    # add timezone info
+    user_tz = get_user_timezone(uuid)
+    reminderModel = asyncio.run(extract_reminders_from_text(text, user_tz))
 
     # if either the event time or reminder time is missing then make them the same
     if reminderModel.event_time is None and len(reminderModel.reminder_time) >0:
@@ -31,13 +35,11 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
     elif reminderModel.event_time is None and reminderModel.reminder_time is None:
         raise ValueError("Could not extract reminder time or event time from text")
 
-
-    # add timezone info
-    user_tz = get_user_timezone(uuid)
+    """ prob not needed as already done in the agent
     reminderModel.event_time = add_tz_info_to_datetime(reminderModel.event_time, user_tz)
     for i in range(len(reminderModel.reminder_time)):
         reminderModel.reminder_time[i] = add_tz_info_to_datetime(reminderModel.reminder_time[i], user_tz)
-
+"""
     dict = {
         "reminder_text": reminderModel.reminder_text,
         "reminder_time": reminderModel.reminder_time,
@@ -66,17 +68,19 @@ def get_user_timezone(uuid: str) -> str:
     """ For now dummy to always return Europe/Berlin"""
     return "Europe/Berlin"
 
-async def extract_reminders_from_text(text: str) -> ReminderModel:
+async def extract_reminders_from_text(text: str, tz: str) -> ReminderModel:
     """
     Extracts reminders from the given text.
 
     Args:
         text (str): The text to extract reminders from.
+        tz (str): The timezone to use for date parsing.
 
     Returns:
         list[str]: A list of extracted reminders.
     """
-    result = await master_extract_reminder_agent.run(text)
+    result = await master_extract_reminder_agent.run(text,deps=ReminderDeps(tzinfo=tz),
+                                                     usage_limits=reminder_usage_limit)
     return result.output
 
 
