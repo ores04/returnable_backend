@@ -2,7 +2,10 @@ import datetime
 import os
 
 import logfire
+import pytz
 import asyncio
+
+from dotenv import load_dotenv
 
 from server.core.ai.agents.exract_reminder_agent import ReminderModel, master_extract_reminder_agent
 from server.core.service.supabase_connectors.supabase_client import get_uuid_from_phone_number, \
@@ -23,13 +26,17 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
     reminderModel = asyncio.run(extract_reminders_from_text(text))
 
     # if either the event time or reminder time is missing then make them the same
-    if reminderModel.event_time is None and reminderModel.reminder_time is not None:
-        reminderModel.event_time = reminderModel.reminder_time
-    elif reminderModel.reminder_time is None and reminderModel.event_time is not None:
-        reminderModel.reminder_time = reminderModel.event_time
+    if reminderModel.event_time is None and len(reminderModel.reminder_time) >0:
+        reminderModel.event_time = reminderModel.reminder_time[0]
     elif reminderModel.event_time is None and reminderModel.reminder_time is None:
         raise ValueError("Could not extract reminder time or event time from text")
 
+
+    # add timezone info
+    user_tz = get_user_timezone(uuid)
+    reminderModel.event_time = add_tz_info_to_datetime(reminderModel.event_time, user_tz)
+    for i in range(len(reminderModel.reminder_time)):
+        reminderModel.reminder_time[i] = add_tz_info_to_datetime(reminderModel.reminder_time[i], user_tz)
 
     dict = {
         "reminder_text": reminderModel.reminder_text,
@@ -44,7 +51,19 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
 
     return reminderModel
 
+def add_tz_info_to_datetime(dt: str, tz_str: str) -> str:
+    """ Adds timezone info to a datetime object."""
+    dt = datetime.datetime.fromisoformat(dt)
+    local_tz = pytz.timezone(tz_str)
+    if dt.tzinfo is None:
+        dt = local_tz.localize(dt)
+    else:
+        dt = dt.astimezone(local_tz)
+    return dt.isoformat()
 
+def get_user_timezone(uuid: str) -> str:
+    """ For now dummy to always return Europe/Berlin"""
+    return "Europe/Berlin"
 
 async def extract_reminders_from_text(text: str) -> ReminderModel:
     """
@@ -67,11 +86,18 @@ def remind_users(last_timestamp: datetime.datetime, current_timestamp: datetime.
     due_reminders = get_all_reminders_after(last_timestamp.isoformat(), current_timestamp.isoformat(), client)
     logfire.info(f"Found {len(due_reminders)} due reminders.")
     for reminder in due_reminders:
-        phone_number = get_phone_number_from_uuid(reminder["user_id"])
+        phone_number = get_phone_number_from_uuid(reminder.user_id)
         if phone_number is None:
-            logfire.error(f"Could not find phone number for user {reminder['user_id']}")
+            logfire.error(f"Could not find phone number for user {reminder.user_id}")
             continue
-        send_message(phone_number,reminder["reminder_text"] ,phone_number_id="836828019507106")
+        send_message(phone_number,reminder.reminder_text ,phone_number_id="836828019507106")
 
 
 
+if __name__ == "__main__":
+    load_dotenv()
+    LOGFIRE_TOKEN = os.environ.get("LOGFIRE_TOKEN")
+    logfire.configure(
+        token=LOGFIRE_TOKEN,
+    )
+    remind_users(datetime.datetime.now(tz=datetime.timezone.utc), datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=60))

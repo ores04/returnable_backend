@@ -2,6 +2,8 @@ import base64
 import datetime
 import os
 from datetime import time
+from functools import reduce
+
 import logfire
 
 import requests
@@ -149,5 +151,5 @@ def handle_text_message(text: str, phone_number, to=None, phone_number_id=None, 
     if any(keyword in text.lower() for keyword in ["erinner", "erinnere", "remind me", "remind", "erinnerung"]):
         logfire.info(f"Received reminder request {phone_number}: {text}")
         reminder = reminder_service(text, phone_number)
-        pretty_reminder_time = datetime.datetime.fromisoformat(reminder.reminder_time).strftime("%I:%M %p")
-        send_message(to,f"Du wirst am {pretty_reminder_time} erinnert.",  phone_number_id)
+        pretty_reminder_time_list = [datetime.datetime.fromisoformat(reminder_time).strftime("%d.%m.%Y %H:%M") for reminder_time in reminder.reminder_time]
+        send_message(to,f"Du wirst am {reduce(lambda x,y: str(x) + "," + str(y), pretty_reminder_time_list, "")} erinnert.",  phone_number_id)

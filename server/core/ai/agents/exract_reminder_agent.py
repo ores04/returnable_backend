@@ -11,15 +11,22 @@ from server.core.ai.agents.agent_consts import CHEAPEST_MODEL, CHEAP_MODEL
 class ReminderModel(BaseModel):
     event_time: str # ISO 8601 format
     reminder_text: str # Text of the reminder
-    reminder_time: str # ISO 8601 format
+    reminder_time: list[str] # ISO 8601 format
 
 
+SYSTEN_PROMPT = """Es wird eine Whatsapp Nachricht übergeben, welche eine Aufgabe und Zeitangaben enthäält. 
+Ziel ist es die Aufgabe, die Zeit wann die Aufgabe erledigt werden soll und die Zeiten wann der Nutzer daran erinnert werden möchte zu extrahieren.
+Das Tool parse_date_from_natural_langugage soll genutzt werden um temporale phrasen wie 'morgen um 11' in ISO Strings zu parsen 
+Das Tool erwartet eine Englische eingabe.
+Der Output ist ein ReminderModel mit der Struktur {
+event_time - die Zeit wann die Aufgabe fällig ist. Kann gleich sein wie die letzte reminder_time,
+reminder_time - die Zeiten wann erinnert werden soll. Kann auch leer sein,
+reminder_text - an was erinnert werden soll}"""#
 
 
 master_extract_reminder_agent = Agent(
     CHEAP_MODEL,
-    system_prompt="""Der Nutzer gibt einen Text ein, welcher eine Aufgabe und eine Zeitangabe enthält, wann die Aufgabe fertig sein soll. Um die Zeitangabe zu verarbeiten nutze das Tool
-    parse_date_from_natural_langugage. Das Tool erwartet eine Englische eingabe mit nur der temporalen phrase. Extrahiere aus dem Text die Aufgabe, die Zeit wann die Aufgabe erledigt sein soll und die Zeit, wann der Nutzer daran erinnert werden möchte. Gibt du keine Zeit an erinnere den Nutzer 1 Stunde vor der Aufgabe.""",
+    system_prompt=SYSTEN_PROMPT,
     instrument=True,
     output_type=ReminderModel,)
 

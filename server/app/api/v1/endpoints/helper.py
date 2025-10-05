@@ -49,7 +49,7 @@ def get_jwt_token_from_supabase(request: JWTRequestBody):
 def pluse_reminder(background_tasks: BackgroundTasks):
     """This is an endpoint that will be periodically called to check if a new reminder needs to be sent."""
     global last_reminder_pulse
-    current_time = datetime.datetime.now()
+    current_time = datetime.datetime.now(tz=datetime.timezone.utc)
     # todo add logic to avaoid getting ddosed
     if last_reminder_pulse is None:
         last_reminder_pulse = current_time - datetime.timedelta(minutes=1)  # Assume the last pulse was 15 minutes ago
