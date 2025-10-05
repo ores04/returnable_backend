@@ -91,6 +91,18 @@ def handle_request(data: dict):
     #print("Received webhook:", json.dumps(data, indent=2))
     logfire.info("Processing incoming WhatsApp webhook...")
     logfire.debug(f"Received WhatsApp request: {data}")
+
+    # ignore self sent messages
+    # Check if it's a message sent by the bot itself
+    business_phone_number = data.get('entry', [{}])[0].get('changes', [{}])[0].get('value', {}).get('metadata', {}).get(
+        'display_phone_number')
+    sender_number = data.get('entry', [{}])[0].get('changes', [{}])[0].get('value', {}).get('messages', [{}])[0].get(
+        'from')
+
+    if business_phone_number and sender_number and business_phone_number == sender_number:
+        logfire.info(f"Ignoring message from business phone number itself")
+        return
+
     # Check if it's a valid WhatsApp notification
     if 'object' in data and 'entry' in data and data['object'] == 'whatsapp_business_account':
         try:
