@@ -93,15 +93,7 @@ def handle_request(data: dict):
     logfire.debug(f"Received WhatsApp request: {data}")
 
     # ignore self sent messages
-    # Check if it's a message sent by the bot itself
-    business_phone_number = data.get('entry', [{}])[0].get('changes', [{}])[0].get('value', {}).get('metadata', {}).get(
-        'display_phone_number')
-    sender_number = data.get('entry', [{}])[0].get('changes', [{}])[0].get('value', {}).get('messages', [{}])[0].get(
-        'from')
 
-    if business_phone_number and sender_number and business_phone_number == sender_number:
-        logfire.info(f"Ignoring message from business phone number itself")
-        return
 
     # Check if it's a valid WhatsApp notification
     if 'object' in data and 'entry' in data and data['object'] == 'whatsapp_business_account':
@@ -109,8 +101,14 @@ def handle_request(data: dict):
             for entry in data['entry']:
                 logfire.info("Start processing entry:" + entry["id"])
                 for change in entry['changes']:
-                    if 'messages' in change['value']:
+                    # ignore if no contacts field -> message sent by myself
+                    if 'contacts' not in change['value']:
+                        logfire.info("Ignoring message sent by myself.")
+                        continue
 
+
+
+                    if 'messages' in change['value']:
                         message = change['value']['messages'][0]
                         message_from = message['from']  # extract the phone number of the sender
                         phone_number_id = change['value']['metadata']['phone_number_id']
