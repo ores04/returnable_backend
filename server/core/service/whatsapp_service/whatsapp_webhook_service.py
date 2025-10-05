@@ -5,6 +5,7 @@ from datetime import time
 from functools import reduce
 
 import logfire
+import pytz
 
 import requests
 from fastapi import HTTPException
@@ -14,8 +15,9 @@ from server.core.ai.ai_clients.mistal_ai_client import MistralAiClient
 from server.core.ai.ai_clients.openai_client import OpenAIClient
 from server.core.service.document_service.file_input_pipeline import process_text_input
 from server.core.service.supabase_connectors.bucket_client import SupabaseBucketClientFactory
-from server.core.service.supabase_connectors.supabase_client import get_supabase_service_role_client
-from server.core.service.whatsapp_service.whatsapp_reminder_service import reminder_service
+from server.core.service.supabase_connectors.supabase_client import get_supabase_service_role_client, \
+    get_uuid_from_phone_number
+from server.core.service.whatsapp_service.whatsapp_reminder_service import reminder_service, get_user_timezone
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
 
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "not_set")
@@ -150,6 +152,13 @@ def handle_text_message(text: str, phone_number, to=None, phone_number_id=None, 
 
     if any(keyword in text.lower() for keyword in ["erinner", "erinnere", "remind me", "remind", "erinnerung"]):
         logfire.info(f"Received reminder request {phone_number}: {text}")
-        reminder = reminder_service(text, phone_number)
-        pretty_reminder_time_list = [datetime.datetime.fromisoformat(reminder_time).strftime("%d.%m.%Y %H:%M") for reminder_time in reminder.reminder_time]
-        send_message(to,f"Du wirst am {reduce(lambda x,y: str(x) + "," + str(y), pretty_reminder_time_list, "")} erinnert.",  phone_number_id)
+
+        uuid = get_uuid_from_phone_number(phone_number)
+        reminder = reminder_service(text, phone_number, uuid)
+        tz_str = get_user_timezone(uuid)
+        local_tz = pytz.timezone(tz_str)
+        pretty_reminder_time_list = [datetime.datetime.fromisoformat(reminder_time).astimezone(
+            local_tz).strftime("%d.%m.%Y %H:%M") for reminder_time in
+                                     reminder.reminder_time]
+        message = f"Du wirst am {reduce(lambda x,y: str(x) + "," + str(y), pretty_reminder_time_list, "") if len(pretty_reminder_time_list) > 1 else pretty_reminder_time_list[0]} erinnert. "
+        send_message(to,message,  phone_number_id)

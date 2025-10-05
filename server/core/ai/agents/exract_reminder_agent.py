@@ -1,4 +1,7 @@
+import datetime
+
 import dateparser
+import logfire
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
@@ -49,6 +52,10 @@ async def parse_date_from_natural_langugage(ctx: RunContext, text: str) -> str |
     """
     date = dateparser.parse(text, languages=["de", "en"])
     if date is not None:
+        # get the machines timezone
+        machine_timezone = datetime.datetime.now().astimezone().tzinfo
+        logfire.info("Using machine timezone: " + str(machine_timezone))
+        date = date.astimezone(machine_timezone)
         date = date.isoformat()
     return date
 

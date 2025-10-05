@@ -45,6 +45,7 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
         "user_id": uuid
     }
 
+
     client = get_supabase_service_role_client()
     resp = add_reminder_with_service_client(client, dict)
 
