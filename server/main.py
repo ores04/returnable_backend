@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
         token=LOGFIRE_TOKEN,
     )
     logfire.instrument_pydantic_ai()
+    logfire.instrument_fastapi(app)
     logfire.info("Starting up FastAPI application...")
     yield
     # Shutdown
