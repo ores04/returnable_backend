@@ -20,14 +20,12 @@ from server.core.service.supabase_connectors.supabase_client import get_supabase
 from server.core.service.whatsapp_service.whatsapp_reminder_service import reminder_service, get_user_timezone
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
 
-VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "not_set")
-ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "not_set")
+from server.core.config.whatsapp_config import WhatsAppConfig
+
+ACCESS_TOKEN = WhatsAppConfig.ACCESS_TOKEN
 API_VERSION = "v22.0"  # Update as needed
 DEBUG = os.getenv("DEBUG", "false")
 SHOULD_SAVE_LOCALLY = False
-
-if VERIFY_TOKEN == "not_set" or ACCESS_TOKEN == "not_set":
-    logfire.warning("Warning: WhatsApp tokens are not set. Please set the environment variables WHATSAPP_VERIFY_TOKEN and WHATSAPP_ACSESS_TOKEN.")
 
 
 def handle_media_message(media_id, mime_type, phone_number, filename=None, to=None, phone_number_id=None):

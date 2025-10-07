@@ -3,7 +3,15 @@ Main API router that includes all endpoint routers.
 """
 from fastapi import APIRouter
 
-from server.app.api.v1.endpoints import health_api, helper, documents_api, email_api, complaint_api, whatsapp_api
+from server.app.api.v1.endpoints import (
+    health_api,
+    helper,
+    documents_api,
+    email_api,
+    complaint_api,
+    whatsapp_api,
+    whatsapp_webhook_api,
+)
 
 
 api_router = APIRouter()
@@ -15,3 +23,4 @@ api_router.include_router(email_api.router, prefix="/email", tags=["email"])
 api_router.include_router(helper.router, prefix="/helper", tags=["helper"])
 api_router.include_router(documents_api.router, prefix="/document", tags=["document"])
 api_router.include_router(whatsapp_api.router, prefix="/whatsapp", tags=["whatsapp"])
+api_router.include_router(whatsapp_webhook_api.router, tags=["whatsapp-webhook"])
