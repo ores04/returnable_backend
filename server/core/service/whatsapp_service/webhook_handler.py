@@ -40,7 +40,6 @@ class WhatsAppWebhookHandler:
             data: Raw webhook payload dictionary
         """
         logfire.info("Processing incoming WhatsApp webhook...")
-        logfire.debug(f"Received WhatsApp request: {data}")
 
         # Validate webhook object type
         if not self._is_valid_webhook(data):
@@ -53,11 +52,17 @@ class WhatsAppWebhookHandler:
 
             for entry in payload.entry:
                 logfire.info(f"Start processing entry: {entry.id}")
-                self._process_entry(entry)
-                logfire.info(f"Finished processing entry: {entry.id}")
+                try:
+                    self._process_entry(entry)
+                    logfire.info(f"Finished processing entry: {entry.id}")
+                except Exception as entry_error:
+                    logfire.error(f"Failed to process entry {entry.id}: {entry_error}")
+                    # Continue processing other entries even if one fails
 
         except Exception as e:
-            logfire.error(f"Failed to process webhook payload: {e}")
+            logfire.error(f"Failed to parse webhook payload: {e}")
+            # Re-raise to signal processing failure for monitoring
+            raise
 
     def _is_valid_webhook(self, data: dict) -> bool:
         """Check if the webhook payload is valid."""

@@ -1,6 +1,6 @@
 """API endpoints for WhatsApp webhook integration."""
 import logfire
-from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 
 from server.core.config.whatsapp_config import WhatsAppConfig
 from server.core.security.whatsapp_auth import verify_whatsapp_webhook
@@ -35,18 +35,26 @@ async def verify_webhook(
         HTTPException: If verification fails
     """
     if hub_mode == "subscribe" and hub_verify_token == WhatsAppConfig.VERIFY_TOKEN:
-        logfire.info("WhatsApp webhook verification successful")
-        return int(hub_challenge)
+        # Validate challenge is numeric and within reasonable bounds
+        try:
+            challenge_int = int(hub_challenge)
+            if challenge_int < 0 or challenge_int > 2**31 - 1:
+                logfire.warning("Challenge value out of bounds")
+                raise HTTPException(status_code=400, detail="Invalid challenge value")
+            logfire.info("WhatsApp webhook verification successful")
+            return challenge_int
+        except (ValueError, TypeError):
+            logfire.warning("Invalid challenge format")
+            raise HTTPException(status_code=400, detail="Invalid challenge format")
 
-    logfire.warning("WhatsApp webhook verification failed")
+    logfire.warning(f"WhatsApp webhook verification failed - mode: {hub_mode}")
     raise HTTPException(status_code=403, detail="Forbidden")
 
 
 @router.post("/whatsapp/webhook")
 async def handle_webhook(
-    request: Request,
     background_tasks: BackgroundTasks,
-    _: None = Depends(verify_whatsapp_webhook)
+    verified_data: tuple = Depends(verify_whatsapp_webhook)
 ):
     """
     Handle incoming WhatsApp webhook events.
@@ -56,15 +64,16 @@ async def handle_webhook(
     Processing is done in the background to respond quickly.
 
     Args:
-        request: The FastAPI request object
         background_tasks: FastAPI background tasks handler
-        _: Signature verification dependency (raises on failure)
+        verified_data: Tuple of (raw_body, parsed_json) from verification dependency
 
     Returns:
         Acknowledgment response for WhatsApp
     """
-    data = await request.json()
-    logfire.debug(f"Received WhatsApp webhook: {data}")
+    _, data = verified_data  # Unpack verified data
+
+    # Log minimal info (avoid logging sensitive data in production)
+    logfire.info("Received verified WhatsApp webhook")
 
     # Process webhook in background to respond quickly
     background_tasks.add_task(webhook_handler.process_webhook, data)
