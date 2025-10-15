@@ -32,6 +32,8 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
     # if either the event time or reminder time is missing then make them the same
     if reminderModel.event_time is None and len(reminderModel.reminder_time) >0:
         reminderModel.event_time = reminderModel.reminder_time[0]
+    if (reminderModel.reminder_time is None or len(reminderModel.reminder_time) == 0) and reminderModel.event_time is not None:
+        reminderModel.reminder_time = [reminderModel.event_time]
     elif reminderModel.event_time is None and reminderModel.reminder_time is None:
         raise ValueError("Could not extract reminder time or event time from text")
 
@@ -91,6 +93,9 @@ def remind_users(last_timestamp: datetime.datetime, current_timestamp: datetime.
     due_reminders = get_all_reminders_after(last_timestamp.isoformat(), current_timestamp.isoformat(), client)
     logfire.info(f"Found {len(due_reminders)} due reminders.")
     for reminder in due_reminders:
+        # if the reminder is done then skip it
+        if reminder.done:
+            continue
         phone_number = get_phone_number_from_uuid(reminder.user_id)
         if phone_number is None:
             logfire.error(f"Could not find phone number for user {reminder.user_id}")

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from server.app.api.v1.api import api_router
+from server.app.api.v1.endpoints import well_known
 from server.core.config.general_config import settings
 
 from dotenv import load_dotenv
@@ -56,6 +57,10 @@ def create_application() -> FastAPI:
 
     # Include API router
     app.include_router(api_router, prefix=settings.API_V1_STR)
+
+    # Include well-known route
+    app.include_router(well_known.router)
+
 
     return app
 
