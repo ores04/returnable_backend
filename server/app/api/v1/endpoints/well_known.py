@@ -3,6 +3,8 @@ from starlette.responses import JSONResponse
 
 router = APIRouter()
 
+""" NOT RELEVANT RIGHT NOW AS THE FILE IS SERVED VIA NGINX"""
+""" NOT RELEVANT RIGHT NOW AS THE FILE IS SERVED VIA NGINX"""
 
 @router.get(
     "/.well-known/assetlinks.json",
