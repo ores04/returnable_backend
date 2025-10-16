@@ -138,7 +138,7 @@ async def verify_purchase_android(
         logfire.error(f"Authentication failed: {str(e)}")
         raise HTTPException(
             status_code=401,
-            detail="Invalid or expired authentication token"
+            detail="Invalid or expired supabase authentication token"
         )
 
     # Construct Google Play Developer API URL for subscription verification
@@ -272,6 +272,203 @@ class SubscriptionCheckResponse(BaseModel):
     expired_subscriptions: int
     reverted_to_free: int
     errors: int
+
+@router.post("/check-expired-subscription", response_model=SubscriptionCheckResponse, summary="Check and Update Expired Subscription for Authenticated User", description="Checks if the authenticated user's subscription has expired and reverts to free tier if no longer subscribed.")
+async def check_expired_subscription(
+    token: str = Depends(oauth2_scheme)
+) -> SubscriptionCheckResponse:
+    """
+    Check if the authenticated user's subscription has expired and revert to free tier if needed.
+
+    This endpoint:
+    1. Authenticates the user via JWT token (OAuth2)
+    2. Queries the USER_META_INFORMATION table for the user's subscription details
+    3. Verifies the subscription status via Google Play Developer API v2
+    4. If subscription is not active (expired, canceled, etc.), reverts user to 'free' tier
+    5. If subscription is still active, updates the expiration time in the database
+
+    Args:
+        token: JWT token from Authorization header (automatically extracted by Depends)
+    Returns:
+        SubscriptionCheckResponse with the result of the check
+
+    """
+    logfire.info("Starting expired subscription check for authenticated user")
+
+    # Get Google access token
+    access_token = get_google_access_token()
+
+    # Get authenticated user's UUID from token
+    try:
+        supabase = get_supabase_client(jwt_token=token)
+        user = supabase.auth.get_user(token).user
+        user_uuid = user.id
+        logfire.info(f"Authenticated user UUID: {user_uuid}")
+    except Exception as e:
+        logfire.error(f"Authentication failed: {str(e)}")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired supabase authentication token"
+        )
+
+    try:
+        # Get current time
+        current_time = datetime.now(timezone.utc)
+        logfire.info(f"Current UTC time: {current_time.isoformat()}")
+
+        # Query user's subscription details
+        result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
+            .select("tier_product_id, tier_expiration_time, purchase_token")\
+            .eq("uuid", user_uuid)\
+            .single()\
+            .execute()
+
+        user_data = result.data
+        if not user_data:
+            logfire.error(f"User profile not found in USER_META_INFORMATION for UUID: {user_uuid}")
+            raise HTTPException(
+                status_code=404,
+                detail="User profile not found in USER_META_INFORMATION table"
+            )
+
+        product_id = user_data.get("tier_product_id")
+        expiration_time_str = user_data.get("tier_expiration_time")
+        purchase_token = user_data.get("purchase_token")
+
+        if not expiration_time_str or product_id == "free":
+            logfire.info(f"User {user_uuid} has no active subscription to check")
+            return SubscriptionCheckResponse(
+                success=True,
+                message="No active subscription to check",
+                total_users_checked=1,
+                expired_subscriptions=0,
+                reverted_to_free=0,
+                errors=0
+            )
+
+        # Parse expiration time
+        expiration_time = datetime.fromisoformat(expiration_time_str.replace('Z', '+00:00'))
+
+        # Check if subscription appears expired locally
+        if expiration_time > current_time:
+            logfire.info(
+                f"User {user_uuid} subscription still valid until {expiration_time_str}",
+                extra={"user_uuid": user_uuid}
+            )
+            return SubscriptionCheckResponse(
+                success=True,
+                message="Subscription still active",
+                total_users_checked=1,
+            )
+
+        # Subscription appears expired, verify with Google Play API
+        logfire.info(
+            f"User {user_uuid} subscription expired at {expiration_time_str}, verifying with Google Play API",
+            extra={"user_uuid": user_uuid, "product_id": product_id}
+        )
+
+        if not purchase_token:
+            logfire.warning(
+                f"User {user_uuid} has no purchase token, reverting to free",
+                extra={"user_uuid": user_uuid}
+            )
+            # No purchase token, revert to free
+            update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME).update({
+                    "tier_product_id": "free",
+                    "tier_expiration_time": None,
+                    "purchase_token": None
+                }) .eq("uuid", user_uuid).execute()
+
+        # Call Google Play Developer API v2 to check subscription status
+        package_name = "info.sebastianorth.effortless"
+        google_api_url = (
+            f"https://androidpublisher.googleapis.com/androidpublisher/v3/"
+            f"applications/{package_name}/purchases/subscriptionsv2/tokens/{purchase_token}"
+        )
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient() as client:
+            # call the actual API
+            response = await client.get(google_api_url, headers=headers, timeout=10.0)
+
+            if response.status_code == 200:
+                # Parse subscription data
+                subscription_data = response.json()
+                subscription_state = subscription_data.get("subscriptionState")
+                logfire.info(
+                    f"Google API subscription state for user {user_uuid}: {subscription_state}",
+                    extra={"user_uuid": user_uuid, "state": subscription_state}
+                )
+                # Check if subscription is active
+                # Active states: SUBSCRIPTION_STATE_ACTIVE, SUBSCRIPTION_STATE_IN_GRACE_PERIOD
+                is_active = subscription_state in [
+                    "SUBSCRIPTION_STATE_ACTIVE",
+                    "SUBSCRIPTION_STATE_IN_GRACE_PERIOD"
+                ]
+                if is_active:
+                    expiry_time_millis = subscription_data.get("expiryTimeMillis")
+
+                    # write to db
+                    if expiry_time_millis:# Convert milliseconds timestamp to datetime
+                        expiry_timestamp = datetime.fromtimestamp(int(expiry_time_millis) / 1000)
+                        expiry_iso = expiry_timestamp.isoformat()
+
+                        logfire.info(
+                            f"Subscription still active for user {user_uuid}, updating expiry to {expiry_iso}",
+                            extra={"user_uuid": user_uuid, "new_expiry": expiry_iso})
+                        update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME).update({
+                                "tier_expiration_time": expiry_iso
+                            }) .eq("uuid", user_uuid).execute()
+                        return SubscriptionCheckResponse(
+                            success=True,
+                            message="Subscription still active, expiry updated",
+                            total_users_checked=1,
+                            expired_subscriptions=1,
+                            reverted_to_free=0)
+
+            # Subscription is not active (expired, canceled, paused, etc.), revert to free
+            logfire.info(
+                f"Subscription not active for user {user_uuid} (state: {subscription_state}), reverting to free",
+                extra={"user_uuid": user_uuid, "state": subscription_state})
+
+            update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME).update({
+                    "tier_product_id": "free",
+                    "tier_expiration_time": None,
+                    "purchase_token": None
+                }) .eq("uuid", user_uuid).execute()
+        return SubscriptionCheckResponse(
+            success=True,
+            message="Subscription expired, reverted to free tier",
+            total_users_checked=1,
+            expired_subscriptions=1,
+            reverted_to_free=1,
+        )
+
+    except httpx.TimeoutException:
+        logfire.error("Timeout calling Google Play API")
+        raise HTTPException(
+            status_code=504,
+            detail="Timeout verifying purchase with Google Play API"
+        )
+    except httpx.RequestError as e:
+        logfire.error(f"Request error calling Google Play API: {str(e)}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error communicating with Google Play API: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logfire.error(f"Unexpected error during purchase verification: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+
 
 
 @router.post(
