@@ -18,6 +18,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY --chown=appuser:appuser ./server /app/server
 
+# Copy Google service account credentials
+COPY --chown=appuser:appuser server/effortless_service_account_key.json /app/effortless_service_account_key.json
+
 # Switch to non-root user
 USER appuser
 

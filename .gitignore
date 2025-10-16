@@ -18,3 +18,4 @@ venv/
 /server/core/service/email_service/oauth_client_id.json
 
 .idea
+/server/effortless_service_account_key.json
