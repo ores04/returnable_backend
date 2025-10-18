@@ -1,5 +1,6 @@
 import datetime
 import os
+from typing import Optional
 
 import logfire
 import pytz
@@ -13,12 +14,13 @@ from server.core.service.supabase_connectors.supabase_client import get_uuid_fro
     get_supabase_service_role_client, get_phone_number_from_uuid
 from server.core.service.supabase_connectors.supabase_reminder_client import add_reminder_with_service_client, \
     get_all_reminders_after
+from server.core.service.supabase_connectors.supabase_tag_service import ReminderTag
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
 
 
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
 
-def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
+def reminder_service(text: str, phone_number: str, uuid=None, possible_tags:list[ReminderTag] = None) -> ReminderModel:
     if uuid is None:
         uuid = get_uuid_from_phone_number(phone_number)
     if uuid is None:
@@ -27,7 +29,7 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
 
     # add timezone info
     user_tz = get_user_timezone(uuid)
-    reminderModel = asyncio.run(extract_reminders_from_text(text, user_tz))
+    reminderModel = asyncio.run(extract_reminders_from_text(text, user_tz, possible_tags=possible_tags))
 
     # if either the event time or reminder time is missing then make them the same
     if reminderModel.event_time is None and len(reminderModel.reminder_time) >0:
@@ -52,7 +54,23 @@ def reminder_service(text: str, phone_number: str, uuid=None) -> ReminderModel:
 
     client = get_supabase_service_role_client()
     resp = add_reminder_with_service_client(client, dict)
+    if not resp:
+        raise ValueError("Could not add reminder to database")
 
+    # get the tag ids to add
+    if reminderModel.reminder_tags is not None and len(reminderModel.reminder_tags) >0:
+        tag_ids = []
+        for tag in possible_tags:
+            if tag.name in reminderModel.reminder_tags:
+                tag_ids.append(tag.id)
+        # now add the tags to the reminder
+        for tag_id in tag_ids:
+            client.table("REMINDER_TAG_CONNECTION").insert({
+                "reminder_id": resp.id,
+                "tag_id": tag_id
+            }).execute()
+
+        logfire.info(f"Added tags {tag_ids} to reminder {resp.id}")
 
     return reminderModel
 
@@ -70,18 +88,20 @@ def get_user_timezone(uuid: str) -> str:
     """ For now dummy to always return Europe/Berlin"""
     return "Europe/Berlin"
 
-async def extract_reminders_from_text(text: str, tz: str) -> ReminderModel:
+async def extract_reminders_from_text(text: str, tz: str, possible_tags: list[ReminderTag] = None) -> ReminderModel:
     """
     Extracts reminders from the given text.
 
     Args:
         text (str): The text to extract reminders from.
         tz (str): The timezone to use for date parsing.
+        possible_tags (list[str], optional): A list of possible tags for the reminder. Defaults to None.
 
     Returns:
         list[str]: A list of extracted reminders.
     """
-    result = await master_extract_reminder_agent.run(text,deps=ReminderDeps(tzinfo=tz),
+    tag_str = [tag.name for tag in possible_tags] if possible_tags is not None else []
+    result = await master_extract_reminder_agent.run(text,deps=ReminderDeps(tzinfo=tz, possible_tags=tag_str),
                                                      usage_limits=reminder_usage_limit)
     return result.output
 

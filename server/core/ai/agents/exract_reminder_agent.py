@@ -17,16 +17,24 @@ class ReminderModel(BaseModel):
     event_time: str # ISO 8601 format
     reminder_text: str # Text of the reminder
     reminder_time: list[str] # ISO 8601 format
+    reminder_tags: list[str] | None = None # optional list of tags/categories associated with the reminder
 
 
-SYSTEN_PROMPT = """Es wird eine Whatsapp Nachricht übergeben, welche eine Aufgabe und Zeitangaben enthäält. 
+SYSTEN_PROMPT = """Es wird eine Whatsapp Nachricht übergeben, welche eine Aufgabe und Zeitangaben enthält. 
 Ziel ist es die Aufgabe, die Zeit wann die Aufgabe erledigt werden soll und die Zeiten wann der Nutzer daran erinnert werden möchte zu extrahieren.
 Das Tool parse_date_from_natural_langugage soll genutzt werden um temporale phrasen wie 'morgen um 11' in ISO Strings zu parsen 
-Das Tool erwartet eine Englische eingabe.
+Das Tool erwartet eine Englische eingabe. 
+
+Es kann sein, dass der Nutzer dem Reminder eine oder mehrere Tags hinzufügt. Falls das so ist, extrahiere die 
+Tags oder Kategorien und weise sie dem Reminder zu. Wähle die Tags aus der Liste possible_tags. Wichtig: 
+der Nutzer muss diese Tags explizit nennen, du darfst keine Tags hinzufügen, die der Nutzer nicht erwähnt hat.
+Tags sind optional.
+
 Der Output ist ein ReminderModel mit der Struktur {
 event_time - die Zeit wann die Aufgabe fällig ist. Kann gleich sein wie die letzte reminder_time,
 reminder_time - die Zeiten wann erinnert werden soll. Kann auch leer sein,
-reminder_text - an was erinnert werden soll}"""#
+reminder_text - an was erinnert werden soll
+reminder_tags - liste der tags/kategorien, welchen der reminder laut Nutzer zugeordnet werden soll}"""#
 
 
 reminder_usage_limit = UsageLimits(
@@ -39,6 +47,7 @@ class ReminderDeps:
     This class is used to inject dependencies into the reminder extraction agent.
     """
     tzinfo: str = "Europe/Berlin"  # default timezone
+    possible_tags: list[str] = None  # possible tags for the reminder
 
 master_extract_reminder_agent = Agent(
     CHEAP_MODEL,
