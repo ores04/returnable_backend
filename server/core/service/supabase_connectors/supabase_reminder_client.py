@@ -116,3 +116,33 @@ def add_reminder_with_service_client(service_client: Client, reminder_data: dict
 
 
     return response.data
+
+
+def add_todo_with_service_client(service_client: Client, todo_data: dict):
+    """This function adds a new todo to the database. A todo is a reminder without reminder_time."""
+    required_fields = ["user_id", "todo_text"]
+
+    for field in required_fields:
+        if field not in todo_data:
+            raise ValueError(f"Missing required field: {field}")
+
+    # ensure event time has the correct timezone info if provided
+    local_tz = pytz.timezone("Europe/Berlin")  # TODO use replace with your local timezone
+    if todo_data.get("event_time") and isinstance(todo_data.get("event_time"), str):
+        todo_data["event_time"] = datetime.datetime.fromisoformat(todo_data["event_time"]).astimezone(local_tz).isoformat()
+
+    todo_payload = {
+        "user_id": todo_data["user_id"],
+        "reminder_text": todo_data["todo_text"],  # Store todo_text in reminder_text field
+        "event_time": todo_data.get("event_time")  # Can be None for todos without a due date
+    }
+
+    # Insert into REMINDER table without adding to REMINDER_TIME table
+    # A todo is distinguished by having no entries in REMINDER_TIME table
+    response = service_client.table(REMINDER_TABLE_NAME).insert(todo_payload).execute()
+    response.raise_when_api_error(response)
+
+    if not response.data or len(response.data) == 0:
+        raise Exception("Failed to create todo")
+
+    return response.data[0]

@@ -19,6 +19,7 @@ from server.core.service.supabase_connectors.supabase_client import get_supabase
     get_uuid_from_phone_number
 from server.core.service.supabase_connectors.supabase_tag_service import get_all_user_accessible_tags
 from server.core.service.whatsapp_service.whatsapp_reminder_service import reminder_service, get_user_timezone
+from server.core.service.whatsapp_service.whatsapp_todo_service import todo_service
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
 
 from server.core.config.whatsapp_config import WhatsAppConfig
@@ -168,8 +169,30 @@ def handle_text_message(text: str, phone_number, to=None, phone_number_id=None):
         message = f"Du wirst am {reduce(lambda x,y: str(x) + "," + str(y), pretty_reminder_time_list, "") if len(pretty_reminder_time_list) > 1 else pretty_reminder_time_list[0]} erinnert. "
         send_message(to,message,  phone_number_id)
 
+    # handle todo messages
+    elif any(keyword in text.lower() for keyword in ["todo", "aufgabe", "task", "merk dir"]):
+        logfire.info(f"Received todo request {phone_number}: {text}")
 
-    # handle to_do messages
+        uuid = get_uuid_from_phone_number(phone_number)
+        possible_tags = None
+        if any(keyword in text.lower() for keyword in ["tag", "kategorie", "category", "tags", "kategorien", "label", "labels"]):
+            logfire.info(f"Received request with possible tags {phone_number}: {text}")
+            client = get_supabase_service_role_client()
+            possible_tags = get_all_user_accessible_tags(uuid, client)
+
+        todo = todo_service(text, phone_number, uuid, possible_tags)
+        tz_str = get_user_timezone(uuid)
+        local_tz = pytz.timezone(tz_str)
+
+        # Create confirmation message with to_do text
+        if todo.event_time:
+            pretty_event_time = datetime.datetime.fromisoformat(todo.event_time).astimezone(
+                local_tz).strftime("%d.%m.%Y %H:%M")
+            message = f"Todo erstellt: \"{todo.todo_text}\" (fällig am {pretty_event_time})"
+        else:
+            message = f"Todo erstellt: \"{todo.todo_text}\""
+
+        send_message(to, message, phone_number_id)
 
 
 
