@@ -146,3 +146,4 @@ def add_todo_with_service_client(service_client: Client, todo_data: dict):
         raise Exception("Failed to create todo")
 
     return response.data[0]
+

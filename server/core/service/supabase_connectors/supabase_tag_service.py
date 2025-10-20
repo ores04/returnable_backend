@@ -71,6 +71,21 @@ def get_all_shared_with_user_tags(uuid: str, service_client: Client) -> list[Rem
             tags.append(ReminderTag(**tag_response.data[0]))
     return tags
 
+def get_all_uuids_with_accsess_to_reminder(reminder_id: int, service_client: Client) -> list[UUID]:
+    """ This function returns all uuids that have access to the reminder with the given id."""
+    response = service_client.table(REMINDER_TAG_CONNECTION_TABLE_NAME).select("*").eq("reminder_id", reminder_id).execute()
+    response.raise_when_api_error(response)
+
+    tag_ids = [ReminderTagConnection(**tag) for tag in response.data]
+    uuids = set()
+    for tag_id in tag_ids:
+        shared_response = service_client.table(REMINDER_TAG_SHARED_TABLE_NAME).select("*").eq("tag_id", tag_id.tag_id).eq("share_accepted", True).execute()
+        shared_response.raise_when_api_error(shared_response)
+        for shared in shared_response.data:
+            shared_tag = ReminderTagShared(**shared)
+            uuids.add(shared_tag.user_shared_with)
+    return list(uuids)
+
 
 
 def get_all_user_accessible_tags(uuid: str, service_client: Client) -> list[ReminderTag]:
@@ -93,3 +108,12 @@ def add_tag_to_reminder(tag_id: int, reminder_id: int, service_client: Client) -
         return ReminderTagConnection(**response.data[0])
     raise Exception("Failed to create tag connection")
 
+
+
+if __name__ == "__main__":
+    # test find_all_uuids_with_accsess_to_reminder
+    from server.core.service.supabase_connectors.supabase_client import get_supabase_service_role_client
+    client = get_supabase_service_role_client()
+    reminder_id = 79
+    uuids = get_all_uuids_with_accsess_to_reminder(reminder_id, client)
+    print(uuids)

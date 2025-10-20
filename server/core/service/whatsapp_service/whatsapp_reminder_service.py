@@ -14,7 +14,8 @@ from server.core.service.supabase_connectors.supabase_client import get_uuid_fro
     get_supabase_service_role_client, get_phone_number_from_uuid
 from server.core.service.supabase_connectors.supabase_reminder_client import add_reminder_with_service_client, \
     get_all_reminders_after
-from server.core.service.supabase_connectors.supabase_tag_service import ReminderTag
+from server.core.service.supabase_connectors.supabase_tag_service import ReminderTag, \
+    get_all_uuids_with_accsess_to_reminder
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
 
 
@@ -116,6 +117,16 @@ def remind_users(last_timestamp: datetime.datetime, current_timestamp: datetime.
         # if the reminder is done then skip it
         if reminder.done:
             continue
+
+        # find possible shared users and send them the reminder as well
+        uuids_with_access = get_all_uuids_with_accsess_to_reminder(reminder.id, client)
+        for uuid in uuids_with_access:
+            phone_number = get_phone_number_from_uuid(uuid)
+            if phone_number is None:
+                logfire.error(f"Could not find phone number for user {uuid}")
+                continue
+            send_message(phone_number,reminder.reminder_text ,phone_number_id="836828019507106")
+
         phone_number = get_phone_number_from_uuid(reminder.user_id)
         if phone_number is None:
             logfire.error(f"Could not find phone number for user {reminder.user_id}")

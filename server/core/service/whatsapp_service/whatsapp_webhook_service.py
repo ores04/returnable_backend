@@ -170,7 +170,7 @@ def handle_text_message(text: str, phone_number, to=None, phone_number_id=None):
         send_message(to,message,  phone_number_id)
 
     # handle todo messages
-    elif any(keyword in text.lower() for keyword in ["todo", "aufgabe", "task", "merk dir"]):
+    elif any(keyword in text.lower() for keyword in ["todo", "aufgabe", "task", "merk dir", "to do", "to-do", "mache eine notiz"]):
         logfire.info(f"Received todo request {phone_number}: {text}")
 
         uuid = get_uuid_from_phone_number(phone_number)

@@ -15,7 +15,7 @@ from server.core.ai.agents.agent_consts import CHEAPEST_MODEL, CHEAP_MODEL
 
 class TodoModel(BaseModel):
     event_time: str | None = None  # ISO 8601 format - when the task is due
-    todo_text: str  # Text of the todo/task
+    todo_text: str  # Text of the to_do/task
     todo_tags: list[str] | None = None  # optional list of tags/categories associated with the todo
 
 
@@ -30,7 +30,7 @@ der Nutzer muss diese Tags explizit nennen, du darfst keine Tags hinzufügen, di
 Tags sind optional.
 
 Der Output ist ein TodoModel mit der Struktur {
-event_time - die Zeit wann die Aufgabe fällig ist (optional, kann None sein),
+event_time - die Zeit wann die Aufgabe fällig ist (optional, kann None sein) - falls keine Zeit angegeben wurde, wann das Todo erledigt werden soll, dann None
 todo_text - die Aufgabe/das was gemerkt werden soll,
 todo_tags - liste der tags/kategorien, welchen das Todo laut Nutzer zugeordnet werden soll (optional)}"""
 
