@@ -359,6 +359,10 @@ async def check_expired_subscription(
                 success=True,
                 message="Subscription still active",
                 total_users_checked=1,
+                expired_subscriptions=0,
+            reverted_to_free = 0,
+            errors = 0
+
             )
 
         # Subscription appears expired, verify with Google Play API
@@ -378,6 +382,14 @@ async def check_expired_subscription(
                     "tier_expiration_time": None,
                     "purchase_token": None
                 }) .eq("uuid", user_uuid).execute()
+            return SubscriptionCheckResponse(
+                success=True,
+                message="No purchase token, reverted to free tier",
+                total_users_checked=1,
+                expired_subscriptions=1,
+                reverted_to_free=1,
+                errors=0
+            )
 
         # Call Google Play Developer API v2 to check subscription status
         package_name = "info.sebastianorth.effortless"
@@ -401,18 +413,30 @@ async def check_expired_subscription(
                     f"Google API subscription state for user {user_uuid}: {subscription_state}",
                     extra={"user_uuid": user_uuid, "state": subscription_state}
                 )
+                print(subscription_data)
+                print(subscription_state)
                 # Check if subscription is active
-                # Active states: SUBSCRIPTION_STATE_ACTIVE, SUBSCRIPTION_STATE_IN_GRACE_PERIOD
+                # Active states: SUBSCRIPTION_STATE_ACTIVE, SUBSCRIPTION_STATE_IN_GRACE_PERIOD,
                 is_active = subscription_state in [
                     "SUBSCRIPTION_STATE_ACTIVE",
                     "SUBSCRIPTION_STATE_IN_GRACE_PERIOD"
                 ]
                 if is_active:
-                    expiry_time_millis = subscription_data.get("expiryTimeMillis")
-
+                    line_items = subscription_data.get("lineItems", [])
+                    if not line_items:
+                        logfire.error(
+                            f"No line items in subscription data for user {user_uuid}",
+                            extra={"user_uuid": user_uuid}
+                        )
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Invalid subscription data: missing line items"
+                        )
+                    # todo for one line it is ok to just take the first - but what if there are multiple lines? ie multipl e subscriptions?
+                    expiry_time = line_items[0].get("expiryTime")
                     # write to db
-                    if expiry_time_millis:# Convert milliseconds timestamp to datetime
-                        expiry_timestamp = datetime.fromtimestamp(int(expiry_time_millis) / 1000)
+                    if expiry_time:# Convert milliseconds timestamp to datetime
+                        expiry_timestamp = datetime.fromisoformat(expiry_time)
                         expiry_iso = expiry_timestamp.isoformat()
 
                         logfire.info(
@@ -426,7 +450,8 @@ async def check_expired_subscription(
                             message="Subscription still active, expiry updated",
                             total_users_checked=1,
                             expired_subscriptions=1,
-                            reverted_to_free=0)
+                            reverted_to_free=0,
+                        errors=0)
 
             # Subscription is not active (expired, canceled, paused, etc.), revert to free
             logfire.info(
@@ -444,6 +469,7 @@ async def check_expired_subscription(
             total_users_checked=1,
             expired_subscriptions=1,
             reverted_to_free=1,
+            errors=0
         )
 
     except httpx.TimeoutException:

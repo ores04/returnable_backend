@@ -19,3 +19,4 @@ venv/
 
 .idea
 /server/effortless_service_account_key.json
+/server/app_store_connect_key.p8
