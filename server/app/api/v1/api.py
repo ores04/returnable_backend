@@ -12,6 +12,7 @@ from server.app.api.v1.endpoints import (
     whatsapp_api,
     whatsapp_webhook_api,
     verify_purchase_android,
+    verify_purchase_ios,
 )
 
 
@@ -26,3 +27,4 @@ api_router.include_router(documents_api.router, prefix="/document", tags=["docum
 api_router.include_router(whatsapp_api.router, prefix="/whatsapp", tags=["whatsapp"])
 api_router.include_router(whatsapp_webhook_api.router, tags=["whatsapp-webhook"])
 api_router.include_router(verify_purchase_android.router, prefix="/purchase/android", tags=["purchase"])
+api_router.include_router(verify_purchase_ios.router, prefix="/purchase/ios", tags=["purchase"])

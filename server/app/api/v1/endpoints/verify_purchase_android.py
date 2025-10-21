@@ -5,20 +5,18 @@ import os
 import logfire
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel
 from typing import Dict, Any
 import httpx
 from datetime import datetime, timezone
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request
 
-from server.core.service.supabase_connectors.supabase_client import (
-    get_supabase_client,
-    get_supabase_service_role_client,
-    USER_META_INFORMATION_TABLE_NAME
+from server.core.service.purchase_verification.models import (
+    AndroidPurchaseVerificationRequest,
+    PurchaseVerificationResponse,
+    SubscriptionCheckResponse
 )
-
-""" OK FOR NOW - BUT WILL NEED TO EXTRACT SUPABASE STUFF TO A COMMON MODULE LATER """
+from server.core.service.purchase_verification.verification_service import VerificationService
 
 router = APIRouter()
 
@@ -79,21 +77,6 @@ def get_google_access_token() -> str:
     return credentials.token
 
 
-class PurchaseVerificationRequest(BaseModel):
-    """Request model for Android purchase verification."""
-    product_id: str
-    purchase_token: str
-    package_name: str = "info.sebastianorth.effortless"
-
-
-class PurchaseVerificationResponse(BaseModel):
-    """Response model for purchase verification."""
-    success: bool
-    message: str
-    product_id: str | None = None
-    expiration_time: str | None = None
-
-
 @router.post(
     "/verify",
     response_model=PurchaseVerificationResponse,
@@ -101,7 +84,7 @@ class PurchaseVerificationResponse(BaseModel):
     description="Verifies an Android in-app purchase using Google Play Developer API and updates user subscription status"
 )
 async def verify_purchase_android(
-    request: PurchaseVerificationRequest,
+    request: AndroidPurchaseVerificationRequest,
     token: str = Depends(oauth2_scheme)
 ) -> PurchaseVerificationResponse:
     """
@@ -114,7 +97,7 @@ async def verify_purchase_android(
        with the product_id and expiration_time for the authenticated user
 
     Args:
-        request: PurchaseVerificationRequest containing product_id, purchase_token, and package_name
+        request: AndroidPurchaseVerificationRequest containing product_id, purchase_token, and package_name
         token: JWT token from Authorization header (automatically extracted by Depends)
 
     Returns:
@@ -129,17 +112,7 @@ async def verify_purchase_android(
     access_token = get_google_access_token()
 
     # Get authenticated user's UUID from token
-    try:
-        supabase = get_supabase_client(jwt_token=token)
-        user = supabase.auth.get_user(token).user
-        user_uuid = user.id
-        logfire.info(f"Authenticated user UUID: {user_uuid}")
-    except Exception as e:
-        logfire.error(f"Authentication failed: {str(e)}")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired supabase authentication token"
-        )
+    supabase, user_uuid = VerificationService.get_authenticated_user_uuid(token)
 
     # Construct Google Play Developer API URL for subscription verification
     google_api_url = (
@@ -200,39 +173,12 @@ async def verify_purchase_android(
             )
 
             # Update Supabase USER_META_INFORMATION table with subscription details
-            update_data = {
-                "tier_product_id": request.product_id,
-                "tier_expiration_time": expiry_iso,
-                "purchase_token": request.purchase_token
-            }
-
-            logfire.info(
-                f"Updating user subscription in database",
-                extra={"user_uuid": user_uuid, "update_data": update_data}
-            )
-
-            result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
-                .update(update_data)\
-                .eq("uuid", user_uuid)\
-                .execute()
-
-            if not result.data:
-                logfire.error(
-                    f"Failed to update user subscription - user not found in USER_META_INFORMATION",
-                    extra={"user_uuid": user_uuid}
-                )
-                raise HTTPException(
-                    status_code=404,
-                    detail="User profile not found in USER_META_INFORMATION table"
-                )
-
-            logfire.info(
-                f"Successfully verified and updated subscription for user {user_uuid}",
-                extra={
-                    "product_id": request.product_id,
-                    "expiry": expiry_iso,
-                    "user_uuid": user_uuid
-                }
+            VerificationService.update_user_subscription(
+                supabase_client=supabase,
+                user_uuid=user_uuid,
+                product_id=request.product_id,
+                expiration_time=expiry_iso,
+                purchase_token=request.purchase_token
             )
 
             return PurchaseVerificationResponse(
@@ -264,15 +210,6 @@ async def verify_purchase_android(
         )
 
 
-class SubscriptionCheckResponse(BaseModel):
-    """Response model for subscription expiry check."""
-    success: bool
-    message: str
-    total_users_checked: int
-    expired_subscriptions: int
-    reverted_to_free: int
-    errors: int
-
 @router.post("/check-expired-subscription", response_model=SubscriptionCheckResponse, summary="Check and Update Expired Subscription for Authenticated User", description="Checks if the authenticated user's subscription has expired and reverts to free tier if no longer subscribed.")
 async def check_expired_subscription(
     token: str = Depends(oauth2_scheme)
@@ -293,43 +230,17 @@ async def check_expired_subscription(
         SubscriptionCheckResponse with the result of the check
 
     """
-    logfire.info("Starting expired subscription check for authenticated user")
+    logfire.info("Starting expired subscription check for authenticated user (Android)")
 
     # Get Google access token
     access_token = get_google_access_token()
 
     # Get authenticated user's UUID from token
-    try:
-        supabase = get_supabase_client(jwt_token=token)
-        user = supabase.auth.get_user(token).user
-        user_uuid = user.id
-        logfire.info(f"Authenticated user UUID: {user_uuid}")
-    except Exception as e:
-        logfire.error(f"Authentication failed: {str(e)}")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired supabase authentication token"
-        )
+    supabase, user_uuid = VerificationService.get_authenticated_user_uuid(token)
 
     try:
-        # Get current time
-        current_time = datetime.now(timezone.utc)
-        logfire.info(f"Current UTC time: {current_time.isoformat()}")
-
-        # Query user's subscription details
-        result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
-            .select("tier_product_id, tier_expiration_time, purchase_token")\
-            .eq("uuid", user_uuid)\
-            .single()\
-            .execute()
-
-        user_data = result.data
-        if not user_data:
-            logfire.error(f"User profile not found in USER_META_INFORMATION for UUID: {user_uuid}")
-            raise HTTPException(
-                status_code=404,
-                detail="User profile not found in USER_META_INFORMATION table"
-            )
+        # Get user's subscription data
+        user_data = VerificationService.get_user_subscription_data(supabase, user_uuid)
 
         product_id = user_data.get("tier_product_id")
         expiration_time_str = user_data.get("tier_expiration_time")
@@ -346,11 +257,8 @@ async def check_expired_subscription(
                 errors=0
             )
 
-        # Parse expiration time
-        expiration_time = datetime.fromisoformat(expiration_time_str.replace('Z', '+00:00'))
-
         # Check if subscription appears expired locally
-        if expiration_time > current_time:
+        if not VerificationService.is_subscription_expired_locally(expiration_time_str):
             logfire.info(
                 f"User {user_uuid} subscription still valid until {expiration_time_str}",
                 extra={"user_uuid": user_uuid}
@@ -360,9 +268,8 @@ async def check_expired_subscription(
                 message="Subscription still active",
                 total_users_checked=1,
                 expired_subscriptions=0,
-            reverted_to_free = 0,
-            errors = 0
-
+                reverted_to_free=0,
+                errors=0
             )
 
         # Subscription appears expired, verify with Google Play API
@@ -377,11 +284,7 @@ async def check_expired_subscription(
                 extra={"user_uuid": user_uuid}
             )
             # No purchase token, revert to free
-            update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME).update({
-                    "tier_product_id": "free",
-                    "tier_expiration_time": None,
-                    "purchase_token": None
-                }) .eq("uuid", user_uuid).execute()
+            VerificationService.revert_user_to_free(supabase, user_uuid)
             return SubscriptionCheckResponse(
                 success=True,
                 message="No purchase token, reverted to free tier",
@@ -442,27 +345,23 @@ async def check_expired_subscription(
                         logfire.info(
                             f"Subscription still active for user {user_uuid}, updating expiry to {expiry_iso}",
                             extra={"user_uuid": user_uuid, "new_expiry": expiry_iso})
-                        update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME).update({
-                                "tier_expiration_time": expiry_iso
-                            }) .eq("uuid", user_uuid).execute()
+                        VerificationService.update_subscription_expiration(
+                            supabase, user_uuid, expiry_iso
+                        )
                         return SubscriptionCheckResponse(
                             success=True,
                             message="Subscription still active, expiry updated",
                             total_users_checked=1,
                             expired_subscriptions=1,
                             reverted_to_free=0,
-                        errors=0)
+                            errors=0)
 
             # Subscription is not active (expired, canceled, paused, etc.), revert to free
             logfire.info(
                 f"Subscription not active for user {user_uuid} (state: {subscription_state}), reverting to free",
                 extra={"user_uuid": user_uuid, "state": subscription_state})
 
-            update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME).update({
-                    "tier_product_id": "free",
-                    "tier_expiration_time": None,
-                    "purchase_token": None
-                }) .eq("uuid", user_uuid).execute()
+            VerificationService.revert_user_to_free(supabase, user_uuid)
         return SubscriptionCheckResponse(
             success=True,
             message="Subscription expired, reverted to free tier",
@@ -521,20 +420,17 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
         This endpoint has no authentication as it's meant to be called by a cron job.
         In production, you should add IP whitelisting or a secret token for security.
     """
-    logfire.info("Starting expired subscription check for all users")
+    logfire.info("Starting expired subscription check for all Android users")
 
     # Get Google access token
     access_token = get_google_access_token()
 
-    # Get service role client (privileged access)
-    try:
-        supabase = get_supabase_service_role_client()
-    except Exception as db_error:
-        logfire.error(f"Failed to get service role client: {str(db_error)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to get privileged database access"
-        )
+    # Get all non-free users
+    users = VerificationService.get_all_non_free_users()
+
+    # Get service role client for updates
+    from server.core.service.supabase_connectors.supabase_client import get_supabase_service_role_client
+    supabase = get_supabase_service_role_client()
 
     total_checked = 0
     expired_count = 0
@@ -543,19 +439,8 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
     active_renewed_count = 0
 
     try:
-        # Get current time
         current_time = datetime.now(timezone.utc)
         logfire.info(f"Current UTC time: {current_time.isoformat()}")
-
-        # Query all users with non-free tiers and their purchase tokens
-        result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
-            .select("uuid, tier_product_id, tier_expiration_time, purchase_token")\
-            .neq("tier_product_id", "free")\
-            .not_.is_("tier_expiration_time", "null")\
-            .execute()
-
-        users = result.data if result.data else []
-        logfire.info(f"Found {len(users)} users with non-free tiers")
 
         for user in users:
             user_uuid = user.get("uuid")
@@ -569,11 +454,8 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
             total_checked += 1
 
             try:
-                # Parse expiration time
-                expiration_time = datetime.fromisoformat(expiration_time_str.replace('Z', '+00:00'))
-
                 # Check if subscription appears expired locally
-                if expiration_time > current_time:
+                if not VerificationService.is_subscription_expired_locally(expiration_time_str):
                     logfire.debug(
                         f"User {user_uuid} subscription still valid until {expiration_time_str}",
                         extra={"user_uuid": user_uuid}
@@ -593,16 +475,7 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
                         extra={"user_uuid": user_uuid}
                     )
                     # No purchase token, revert to free
-                    update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
-                        .update({
-                            "tier_product_id": "free",
-                            "tier_expiration_time": None,
-                            "purchase_token": None
-                        })\
-                        .eq("uuid", user_uuid)\
-                        .execute()
-
-                    if update_result.data:
+                    if VerificationService.revert_user_to_free(supabase, user_uuid):
                         reverted_count += 1
                     else:
                         error_count += 1
@@ -633,16 +506,7 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
                             extra={"user_uuid": user_uuid, "status_code": response.status_code, "response": response.text}
                         )
                         # API call failed or subscription not found, revert to free
-                        update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
-                            .update({
-                                "tier_product_id": "free",
-                                "tier_expiration_time": None,
-                                "purchase_token": None
-                            })\
-                            .eq("uuid", user_uuid)\
-                            .execute()
-
-                        if update_result.data:
+                        if VerificationService.revert_user_to_free(supabase, user_uuid):
                             reverted_count += 1
                         else:
                             error_count += 1
@@ -679,14 +543,9 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
                                     extra={"user_uuid": user_uuid, "new_expiry": new_expiry_iso}
                                 )
 
-                                update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
-                                    .update({
-                                        "tier_expiration_time": new_expiry_iso
-                                    })\
-                                    .eq("uuid", user_uuid)\
-                                    .execute()
-
-                                if update_result.data:
+                                if VerificationService.update_subscription_expiration(
+                                    supabase, user_uuid, new_expiry_iso
+                                ):
                                     active_renewed_count += 1
                                 else:
                                     error_count += 1
@@ -709,16 +568,7 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
                             extra={"user_uuid": user_uuid, "state": subscription_state}
                         )
 
-                        update_result = supabase.from_(USER_META_INFORMATION_TABLE_NAME)\
-                            .update({
-                                "tier_product_id": "free",
-                                "tier_expiration_time": None,
-                                "purchase_token": None
-                            })\
-                            .eq("uuid", user_uuid)\
-                            .execute()
-
-                        if update_result.data:
+                        if VerificationService.revert_user_to_free(supabase, user_uuid):
                             reverted_count += 1
                         else:
                             error_count += 1
@@ -732,7 +582,7 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
                 continue
 
         logfire.info(
-            f"Subscription check completed",
+            f"Android subscription check completed",
             extra={
                 "total_checked": total_checked,
                 "expired": expired_count,
@@ -744,7 +594,7 @@ async def check_expired_subscriptions() -> SubscriptionCheckResponse:
 
         return SubscriptionCheckResponse(
             success=True,
-            message=f"Subscription check completed successfully. Active renewals: {active_renewed_count}",
+            message=f"Android subscription check completed successfully. Active renewals: {active_renewed_count}",
             total_users_checked=total_checked,
             expired_subscriptions=expired_count,
             reverted_to_free=reverted_count,
