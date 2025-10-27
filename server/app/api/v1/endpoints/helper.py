@@ -58,7 +58,7 @@ def pluse_reminder(background_tasks: BackgroundTasks):
 
     return {
         "status": "success",
-        "message": "Remember to take your pluse!"
+        "message": "Pulse triggered"
     }
 
 @router.get("/test_supabase_connection")

@@ -13,6 +13,7 @@ from server.app.api.v1.endpoints import (
     whatsapp_webhook_api,
     verify_purchase_android,
     verify_purchase_ios,
+    revenuecat_webhook_api,
 )
 
 
@@ -28,3 +29,4 @@ api_router.include_router(whatsapp_api.router, prefix="/whatsapp", tags=["whatsa
 api_router.include_router(whatsapp_webhook_api.router, tags=["whatsapp-webhook"])
 api_router.include_router(verify_purchase_android.router, prefix="/purchase/android", tags=["purchase"])
 api_router.include_router(verify_purchase_ios.router, prefix="/purchase/ios", tags=["purchase"])
+api_router.include_router(revenuecat_webhook_api.router, tags=["revenuecat-webhook"])
