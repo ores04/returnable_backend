@@ -85,9 +85,7 @@ def add_tz_info_to_datetime(dt: str, tz_str: str) -> str:
         dt = dt.astimezone(local_tz)
     return dt.isoformat()
 
-def get_user_timezone(uuid: str) -> str:
-    """ For now dummy to always return Europe/Berlin"""
-    return "Europe/Berlin"
+
 
 async def extract_reminders_from_text(text: str, tz: str, possible_tags: list[ReminderTag] = None) -> ReminderModel:
     """

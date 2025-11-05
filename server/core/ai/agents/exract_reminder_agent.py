@@ -57,29 +57,34 @@ master_extract_reminder_agent = Agent(
     output_type=ReminderModel,)
 
 @master_extract_reminder_agent.tool
-async def parse_date_from_natural_langugage(ctx: RunContext[ReminderDeps], text: str) -> str | None:
+async def parse_date_from_natural_language(ctx: RunContext[ReminderDeps], text: str) -> str | None:
     """
-    Parses a date from natural language text. The text can be in one of the following formats:
-    - "in 2 hours"
-    - "tomorrow at 3pm"
-    - "next Monday"
-    - "on 25th December"
-    - "on 2023-12-25"
-    and the function should return the date in ISO 8601 format (YYYY-MM-DDTHH:MM:SS).
+    Parses a date from natural language text and returns ISO 8601 format.
+
+    Examples: "in 2 hours", "tomorrow at 3pm", "next Monday", "on 2023-12-25"
 
     Args:
-        text (str): The text to parse the date from.
-        ctx (RunContext[ReminderDeps]): The run context containing dependencies.
+        text: Natural language date/time expression (English)
+        ctx: Run context with timezone info
 
     Returns:
-        str | None: The parsed date in ISO 8601 format, or None if no date is found.
+        ISO 8601 formatted datetime string or None
     """
-    date = dateparser.parse(text, languages=["de", "en"], settings={'TIMEZONE': ctx.deps.tzinfo, 'RETURN_AS_TIMEZONE_AWARE': True})
+    settings = {
+        'TIMEZONE': ctx.deps.tzinfo,
+        'RETURN_AS_TIMEZONE_AWARE': True,
+        'PREFER_DATES_FROM': 'future',  # Assume future dates for reminders
+        'RELATIVE_BASE': datetime.datetime.now()
+    }
+
+    date = dateparser.parse(text, languages=["en", "de"], settings=settings)
+
     if date is not None:
-        # get the machines timezone
-        logfire.info(f"Parsed date {date} has timezone {date.tzinfo}'")
-        date = date.isoformat()
-    return date
+        logfire.info(f"Parsed '{text}' → {date.isoformat()}")
+        return date.isoformat()
+    else:
+        logfire.warning(f"Failed to parse date from: '{text}'")
+        return None
 
 
 
