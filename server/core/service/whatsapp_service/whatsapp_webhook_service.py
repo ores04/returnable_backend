@@ -119,7 +119,7 @@ def write_file_to_disk(filename, media_response):
             f.write(media_response.content)
     return save_path
 
-def handle_audio_message(media_id, mime_type, phone_number, filename=None, to=None, phone_number_id=None):
+async def handle_audio_message(media_id, mime_type, phone_number, filename=None, to=None, phone_number_id=None):
     logfire.info("Handling audio message")
     # download the audio file
     try:
@@ -144,13 +144,13 @@ def handle_audio_message(media_id, mime_type, phone_number, filename=None, to=No
         return
 
     logfire.info(f"Transcribed audio to text: {text}")
-    handle_text_message(text, phone_number, to, phone_number_id)
+    await handle_text_message(text, phone_number, to, phone_number_id)
 
 
 
 
 
-def handle_text_message(text: str, phone_number, to=None, phone_number_id=None):
+async def handle_text_message(text: str, phone_number, to=None, phone_number_id=None):
     uuid = get_uuid_from_phone_number(phone_number)
     possible_tags = None
     if any(keyword in text.lower() for keyword in
@@ -159,6 +159,4 @@ def handle_text_message(text: str, phone_number, to=None, phone_number_id=None):
         client = get_supabase_service_role_client()
         possible_tags = get_all_user_accessible_tags(uuid, client)
 
-    handle_todo_or_reminder_extraction(text, phone_number, to, phone_number_id,uuid=uuid,possible_tags=possible_tags)
-
-
+    await handle_todo_or_reminder_extraction(text, phone_number, to, phone_number_id,uuid=uuid,possible_tags=possible_tags)

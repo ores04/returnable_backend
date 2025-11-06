@@ -32,7 +32,7 @@ class WhatsAppWebhookHandler:
             MessageType.AUDIO: self._handle_audio_message,
         }
 
-    def process_webhook(self, data: dict) -> None:
+    async def process_webhook(self, data: dict) -> None:
         """
         Process incoming WhatsApp webhook data.
 
@@ -53,7 +53,7 @@ class WhatsAppWebhookHandler:
             for entry in payload.entry:
                 logfire.info(f"Start processing entry: {entry.id}")
                 try:
-                    self._process_entry(entry)
+                    await self._process_entry(entry)
                     logfire.info(f"Finished processing entry: {entry.id}")
                 except Exception as entry_error:
                     logfire.error(f"Failed to process entry {entry.id}: {entry_error}")
@@ -72,7 +72,7 @@ class WhatsAppWebhookHandler:
             and data["object"] == WhatsAppConfig.WEBHOOK_OBJECT_TYPE
         )
 
-    def _process_entry(self, entry) -> None:
+    async def _process_entry(self, entry) -> None:
         """
         Process a single webhook entry.
 
@@ -87,9 +87,9 @@ class WhatsAppWebhookHandler:
 
             # Process messages if present
             if change.value.messages:
-                self._process_message(change)
+                await self._process_message(change)
 
-    def _process_message(self, change) -> None:
+    async def _process_message(self, change) -> None:
         """
         Process a single message from a change object.
 
@@ -113,7 +113,7 @@ class WhatsAppWebhookHandler:
             # Dispatch to appropriate handler
             handler = self.message_handlers.get(context.message_type)
             if handler:
-                handler(context)
+                await handler(context)
             else:
                 logfire.warning(f"No handler for message type: {context.message_type}")
 
@@ -150,7 +150,7 @@ class WhatsAppWebhookHandler:
             phone_number_id=context.phone_number_id,
         )
 
-    def _handle_text_message(self, context: MessageContext) -> None:
+    async def _handle_text_message(self, context: MessageContext) -> None:
         """Handle text messages."""
         if not context.message.text:
             logfire.error("Text message missing text data")
@@ -159,14 +159,14 @@ class WhatsAppWebhookHandler:
         text = context.message.text.body
         logfire.info(f"Received text message from {context.phone_number}: {text}")
 
-        handle_text_message(
+        await handle_text_message(
             text=text,
             phone_number=context.phone_number,
             to=context.message_from,
             phone_number_id=context.phone_number_id,
         )
 
-    def _handle_audio_message(self, context: MessageContext) -> None:
+    async def _handle_audio_message(self, context: MessageContext) -> None:
         """Handle audio messages (premium users only)."""
         if not context.message.audio:
             logfire.error("Audio message missing audio data")
@@ -183,7 +183,7 @@ class WhatsAppWebhookHandler:
             return
 
         logfire.info(f"User {context.phone_number} is premium, processing audio message.")
-        handle_audio_message(
+        await handle_audio_message(
             media_id=context.message.audio.id,
             mime_type=context.message.audio.mime_type,
             phone_number=context.phone_number,

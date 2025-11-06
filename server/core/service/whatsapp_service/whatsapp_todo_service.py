@@ -1,6 +1,4 @@
 import os
-from typing import Optional
-import asyncio
 
 import logfire
 from dotenv import load_dotenv
@@ -16,16 +14,17 @@ from server.core.service.whatsapp_service.whatsapp_utils import send_message
 
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
 
-def todo_service(text: str, phone_number: str, uuid=None, possible_tags: list[ReminderTag] = None) -> TodoModel:
+async def todo_service(text: str, phone_number: str|None, uuid=None, possible_tags: list[ReminderTag] = None) -> TodoModel:
     if uuid is None:
         uuid = get_uuid_from_phone_number(phone_number)
     if uuid is None:
         raise ValueError("User not found")
-    send_message(phone_number, "Erstelle dein Todo...", WHATSAPP_PHONE_ID)
+    if phone_number is not None:
+        send_message(phone_number, "Erstelle dein Todo...", WHATSAPP_PHONE_ID)
 
     # add timezone info
     user_tz = get_user_timezone(uuid)
-    todoModel = asyncio.run(extract_todo_from_text(text, user_tz, possible_tags=possible_tags))
+    todoModel = await extract_todo_from_text(text, user_tz, possible_tags=possible_tags)
 
     # Prepare the dictionary for database insertion
     dict_data = {

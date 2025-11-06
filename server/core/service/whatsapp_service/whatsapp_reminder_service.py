@@ -1,10 +1,8 @@
 import datetime
 import os
-from typing import Optional
 
 import logfire
 import pytz
-import asyncio
 
 from dotenv import load_dotenv
 
@@ -16,21 +14,23 @@ from server.core.service.supabase_connectors.supabase_reminder_client import add
     get_all_reminders_after
 from server.core.service.supabase_connectors.supabase_tag_service import ReminderTag, \
     get_all_uuids_with_accsess_to_reminder
+from server.core.service.whatsapp_service.whatsapp_todo_service import get_user_timezone
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
 
 
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
 
-def reminder_service(text: str, phone_number: str, uuid=None, possible_tags:list[ReminderTag] = None) -> ReminderModel:
+async def reminder_service(text: str, phone_number: str | None, uuid=None, possible_tags:list[ReminderTag] = None) -> ReminderModel:
     if uuid is None:
         uuid = get_uuid_from_phone_number(phone_number)
     if uuid is None:
         raise ValueError("User not found")
-    send_message(phone_number, "Erstlle deine Erinnerung...", WHATSAPP_PHONE_ID)
+    if phone_number is not None:
+        send_message(phone_number, "Erstlle deine Erinnerung...", WHATSAPP_PHONE_ID)
 
     # add timezone info
     user_tz = get_user_timezone(uuid)
-    reminderModel = asyncio.run(extract_reminders_from_text(text, user_tz, possible_tags=possible_tags))
+    reminderModel = await extract_reminders_from_text(text, user_tz, possible_tags=possible_tags)
 
     # if either the event time or reminder time is missing then make them the same
     if reminderModel.event_time is None and len(reminderModel.reminder_time) >0:
