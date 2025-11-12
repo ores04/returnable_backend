@@ -14,7 +14,6 @@ from server.core.service.supabase_connectors.supabase_client import (
 )
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
 from server.core.service.whatsapp_service.whatsapp_webhook_service import (
-    handle_media_message,
     handle_text_message,
     handle_audio_message,
 )
@@ -26,8 +25,6 @@ class WhatsAppWebhookHandler:
     def __init__(self):
         """Initialize the webhook handler with message type handlers."""
         self.message_handlers: Dict[MessageType, Callable] = {
-            MessageType.IMAGE: self._handle_image_message,
-            MessageType.DOCUMENT: self._handle_document_message,
             MessageType.TEXT: self._handle_text_message,
             MessageType.AUDIO: self._handle_audio_message,
         }
@@ -120,35 +117,6 @@ class WhatsAppWebhookHandler:
         except (KeyError, IndexError) as e:
             logfire.error(f"Could not parse message: {e}")
 
-    def _handle_image_message(self, context: MessageContext) -> None:
-        """Handle image messages."""
-        if not context.message.image:
-            logfire.error("Image message missing image data")
-            return
-
-        handle_media_message(
-            media_id=context.message.image.id,
-            mime_type=context.message.image.mime_type,
-            phone_number=context.phone_number,
-            filename=None,
-            to=context.message_from,
-            phone_number_id=context.phone_number_id,
-        )
-
-    def _handle_document_message(self, context: MessageContext) -> None:
-        """Handle document messages."""
-        if not context.message.document:
-            logfire.error("Document message missing document data")
-            return
-
-        handle_media_message(
-            media_id=context.message.document.id,
-            mime_type=context.message.document.mime_type,
-            phone_number=context.phone_number,
-            filename=context.message.document.filename or "downloaded_file",
-            to=context.message_from,
-            phone_number_id=context.phone_number_id,
-        )
 
     async def _handle_text_message(self, context: MessageContext) -> None:
         """Handle text messages."""

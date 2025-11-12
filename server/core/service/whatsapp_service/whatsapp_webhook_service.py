@@ -10,19 +10,13 @@ import pytz
 import requests
 from fastapi import HTTPException
 
-from server.core.ai.agents.invoice_image_processing_using_llm import LLMImageProcessor
-from server.core.ai.ai_clients.mistal_ai_client import MistralAiClient
 from server.core.ai.ai_clients.openai_client import OpenAIClient
-from server.core.service.document_service.file_input_pipeline import process_text_input
-from server.core.service.supabase_connectors.bucket_client import SupabaseBucketClientFactory
 from server.core.service.supabase_connectors.supabase_client import get_supabase_service_role_client, \
     get_uuid_from_phone_number
 from server.core.service.supabase_connectors.supabase_tag_service import get_all_user_accessible_tags
 from server.core.service.whatsapp_service.whatsapp_parent_todo_remidner_service import \
     handle_todo_or_reminder_extraction
-from server.core.service.whatsapp_service.whatsapp_reminder_service import reminder_service, get_user_timezone
-from server.core.service.whatsapp_service.whatsapp_todo_service import todo_service
-from server.core.service.whatsapp_service.whatsapp_utils import send_message
+
 
 from server.core.config.whatsapp_config import WhatsAppConfig
 
@@ -30,50 +24,6 @@ ACCESS_TOKEN = WhatsAppConfig.ACCESS_TOKEN
 API_VERSION = "v22.0"  # Update as needed
 DEBUG = os.getenv("DEBUG", "false")
 SHOULD_SAVE_LOCALLY = False
-
-
-def handle_media_message(media_id, mime_type, phone_number, filename=None, to=None, phone_number_id=None):
-    """
-    Downloads media from WhatsApp and calls a processing function.
-    """
-    try:
-        # 1. Get Media URL
-        media_response = download_media_file(media_id)
-
-        # 3. Save and Process the file
-        if not filename:
-            # Generate a filename if not provided (e.g., from image messages)
-            extension = mime_type.split('/')[1]
-            filename = f"{media_id}.{extension}"
-
-        if DEBUG and SHOULD_SAVE_LOCALLY:
-            save_path = write_file_to_disk(filename, media_response)
-            logfire.info(f"Successfully downloaded and saved: {save_path}")
-
-        # save file to supabase
-        current_date = time().strftime(format="%Y_%m_%d")
-        filename = f"{current_date}_{filename}"
-        subabase_bucket_client = SupabaseBucketClientFactory.create_from_service_level_client(phone_number)
-        subabase_bucket_client.add_document_to_bucket(media_response.content, filename, "user_files") # TODO check
-
-        if mime_type == "application/pdf":
-            b64_encoded_pdf = base64.b64encode(media_response.content)
-            process_document(b64_encoded_pdf, filename, None, uuid=subabase_bucket_client.uuid)
-        elif mime_type.startswith("image/"):
-            b64_encoded_image = base64.b64encode(media_response.content)
-            process_document(b64_encoded_image, filename, None, uuid=subabase_bucket_client.uuid)
-
-        else:
-            logfire.warning(f"Unsupported media type: {mime_type}")
-            return
-
-        if to is not None and phone_number_id is not None:
-            message = f"Your document {filename} has been successfully processed and added to your account."
-            send_message(to, message, phone_number_id)
-
-
-    except requests.exceptions.RequestException as e:
-        logfire.error(f"Error handling media message: {e}")
 
 
 def download_media_file(media_id):
@@ -87,20 +37,6 @@ def download_media_file(media_id):
     media_response = requests.get(media_url, headers=headers)
     media_response.raise_for_status()
     return media_response
-
-
-def process_document(contents, doc_title, token, uuid):
-    mistal_client = MistralAiClient()
-    llm_image_processor = LLMImageProcessor(mistal_client)
-    text = llm_image_processor.process_image(image_base64=contents, is_pdf=False)
-    if uuid is not None:
-        client = get_supabase_service_role_client()
-    else:
-        client = None
-    doc_id = process_text_input(text=text, title=doc_title, jwt_token=token, supabase_client=client, uuid=uuid)
-    if doc_id is None:
-        raise HTTPException(status_code=400, detail="Document not added")
-    return doc_id
 
 def write_file_to_disk(filename, media_response):
     # current dir

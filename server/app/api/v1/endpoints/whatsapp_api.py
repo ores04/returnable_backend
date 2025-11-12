@@ -3,12 +3,8 @@ import logfire
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, Query, Request, BackgroundTasks, Header
 from fastapi.security import OAuth2PasswordBearer
-
-from server.core.service.supabase_connectors.supabase_client import get_uuid_from_phone_number, \
-    is_premium_user_from_uuid
 from server.core.service.whatsapp_service.whatsapp_utils import send_message
-from server.core.service.whatsapp_service.whatsapp_webhook_service import handle_media_message, process_document, \
-    handle_text_message, handle_audio_message
+
 
 router = APIRouter()
 
