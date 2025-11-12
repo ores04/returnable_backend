@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env.server", case_sensitive=True)
 
-    PROJECT_NAME: str = "Returnable FastAPI Server"
+    PROJECT_NAME: str = "Effortless Server"
     VERSION: str = "1.0.0"
-    DESCRIPTION: str = "A FastAPI server with blueprint-like structure"
+    DESCRIPTION: str = "backend server for Effortless app"
 
     API_V1_STR: str = "/api/v1"
 
