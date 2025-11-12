@@ -41,7 +41,7 @@ async def process_candidate(candidate: Candidate, phone_number: str | None, uuid
 
         created_item = {
             "type": "todo",
-            "todo_text": todo.todo_text,
+            "reminder_text": todo.todo_text,
             "event_time": todo.event_time,
             "tags": todo.todo_tags
         }
@@ -108,7 +108,8 @@ Do NOT invent times for items that have none.
 """
     logfire.info(f"Extracting todos/reminders from text: {text}")
     response = ai_agent.request_text_model(PROMPT, text, model="gpt-5-nano", response_model=ExtractionResult)
-    logfire.info(response)
+    print(response.candidates)
+    logfire.info("Extraction result ")
 
     tz_str = get_user_timezone(uuid)
     local_tz = pytz.timezone(tz_str)
@@ -127,6 +128,8 @@ Do NOT invent times for items that have none.
         if created_item and message:
             created_items.append(created_item)
             messages.append(message)
+
+    print(created_items)
 
     return {
         "items": created_items,
