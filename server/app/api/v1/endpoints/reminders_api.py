@@ -5,10 +5,10 @@ from typing import List, Optional
 from datetime import datetime
 import logfire
 
-from core.service.supabase_connectors.supabase_client import get_supabase_client
-from core.service.supabase_connectors import supabase_reminder_client as reminder_client
-from core.service.supabase_connectors import parent_reminder_service
-from core.models.reminder_models import (
+from server.core.service.supabase_connectors.supabase_client import get_supabase_client
+from server.core.service.supabase_connectors import supabase_reminder_client as reminder_client
+from server.core.service.supabase_connectors import parent_reminder_service
+from server.core.models.reminder_models import (
     ReminderModel,
     CreateReminderRequest,
     CreateReminderWithTagsRequest,

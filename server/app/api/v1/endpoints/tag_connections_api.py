@@ -5,9 +5,9 @@ from typing import List, Optional
 from datetime import datetime
 import logfire
 
-from core.service.supabase_connectors.supabase_client import get_supabase_client
-from core.service.supabase_connectors import tag_connection_service
-from core.models.reminder_models import (
+from server.core.service.supabase_connectors.supabase_client import get_supabase_client
+from server.core.service.supabase_connectors import tag_connection_service
+from server.core.models.reminder_models import (
     ReminderTagConnectionModel,
     CreateTagConnectionRequest
 )

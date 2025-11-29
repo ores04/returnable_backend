@@ -18,7 +18,6 @@ from server.app.api.v1.endpoints import (
     tag_connections_api,
     tag_sharing_api,
     tag_filters_api,
-    tasks_api,
 )
 
 
@@ -40,4 +39,3 @@ api_router.include_router(tags_api.router, prefix="/tags", tags=["tags"])
 api_router.include_router(tag_connections_api.router, prefix="/tag-connections", tags=["tag-connections"])
 api_router.include_router(tag_sharing_api.router, prefix="/tag-sharing", tags=["tag-sharing"])
 api_router.include_router(tag_filters_api.router, prefix="/tag-filters", tags=["tag-filters"])
-api_router.include_router(tasks_api.router, prefix="/tasks", tags=["tasks"])

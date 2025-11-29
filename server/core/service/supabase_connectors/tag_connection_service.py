@@ -4,7 +4,6 @@ from supabase import Client
 from typing import List, Optional, Dict
 from datetime import datetime
 
-from core.models.reminder_models import ReminderTagConnectionModel
 
 
 def create_connection(connection_data: dict, service_client: Client) -> int:
