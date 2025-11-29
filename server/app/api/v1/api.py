@@ -12,6 +12,13 @@ from server.app.api.v1.endpoints import (
     verify_purchase_ios,
     revenuecat_webhook_api,
     create_todo_api,
+    # New reminder/tag/task endpoints
+    reminders_api,
+    tags_api,
+    tag_connections_api,
+    tag_sharing_api,
+    tag_filters_api,
+    tasks_api,
 )
 
 
@@ -26,3 +33,11 @@ api_router.include_router(verify_purchase_android.router, prefix="/purchase/andr
 api_router.include_router(verify_purchase_ios.router, prefix="/purchase/ios", tags=["purchase"])
 api_router.include_router(revenuecat_webhook_api.router, tags=["revenuecat-webhook"])
 api_router.include_router(create_todo_api.router, prefix="/todo", tags=["todo"])
+
+# Reminder, Tag, and Task endpoints
+api_router.include_router(reminders_api.router, prefix="/reminders", tags=["reminders"])
+api_router.include_router(tags_api.router, prefix="/tags", tags=["tags"])
+api_router.include_router(tag_connections_api.router, prefix="/tag-connections", tags=["tag-connections"])
+api_router.include_router(tag_sharing_api.router, prefix="/tag-sharing", tags=["tag-sharing"])
+api_router.include_router(tag_filters_api.router, prefix="/tag-filters", tags=["tag-filters"])
+api_router.include_router(tasks_api.router, prefix="/tasks", tags=["tasks"])
